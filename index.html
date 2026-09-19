@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#12372A">
+<title>Coffre, vos documents scolaires</title>
+<style>
+:root{
+  --pine:#12372A; --pine-soft:#DDE8E2; --brass:#B8892F;
+  --paper:#F3F5F2; --card:#FFFFFF; --ink:#1A2622; --muted:#55635D;
+  --line:#D5DDD8; --danger:#A8362B; --ok:#1F6B45;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+h1,h2{font-family:Georgia,"Times New Roman",serif;line-height:1.2;margin:0}
+button,input,select{font:inherit}
+:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
+
+.bar{background:var(--pine);color:#fff}
+.bar-in{max-width:560px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:10px;font-family:Georgia,"Times New Roman",serif;font-size:22px;font-weight:700}
+.brand svg{width:26px;height:26px;flex:none}
+
+main{max-width:560px;margin:0 auto;padding:22px 16px 56px}
+
+.btn{min-height:48px;padding:0 18px;border-radius:10px;border:1.5px solid var(--pine);
+  background:var(--pine);color:#fff;font-weight:600;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--pine)}
+.btn.small{min-height:40px;padding:0 14px}
+.btn.on-dark{background:transparent;border-color:rgba(255,255,255,.55);color:#fff}
+.btn.danger{background:transparent;border-color:var(--danger);color:var(--danger)}
+.btn.wide{width:100%;margin-top:18px}
+.btn[disabled]{opacity:.55;cursor:default}
+
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+label{display:block;font-weight:600;margin:14px 0 6px}
+input,select{width:100%;min-height:48px;padding:0 12px;border:1.5px solid var(--line);
+  border-radius:10px;background:#fff;color:var(--ink)}
+input[type=file]{height:auto;padding:10px 12px}
+.hint{color:var(--muted);font-size:14px;margin:6px 0 0}
+
+.hero h1{font-size:28px;margin-bottom:10px}
+.hero p{margin:0 0 20px;color:var(--muted)}
+
+.tabs{display:flex;border-bottom:1px solid var(--line);margin:-4px 0 4px}
+.tab{flex:1;min-height:48px;background:none;border:0;border-bottom:3px solid transparent;
+  font-weight:600;color:var(--muted);cursor:pointer}
+.tab[aria-selected="true"]{color:var(--pine);border-bottom-color:var(--brass)}
+
+.notice{margin:14px 0 0;padding:10px 12px;border-radius:10px;font-size:15px}
+.notice.error{background:#F8E3E0;color:var(--danger)}
+.notice.ok{background:#DFF0E6;color:var(--ok)}
+
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+.head h2{font-size:24px}
+.who{color:var(--muted);font-size:14px;overflow-wrap:anywhere}
+.tools{display:grid;gap:10px;margin-bottom:14px}
+
+.docs{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:10px}
+.doc{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px}
+.doc strong{display:block;overflow-wrap:anywhere}
+.meta{color:var(--muted);font-size:14px}
+.doc-actions{display:flex;gap:8px;margin-top:10px}
+.empty{padding:28px 16px;text-align:center;color:var(--muted);border:1.5px dashed var(--line);border-radius:12px}
+.empty strong{display:block;color:var(--ink);margin-bottom:4px}
+
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);max-width:calc(100% - 32px);
+  background:var(--pine);color:#fff;padding:12px 18px;border-radius:10px;font-size:15px}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-in">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#B8892F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="4" y="10.5" width="16" height="10" rx="2.5"/>
+        <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>
+        <circle cx="12" cy="15.5" r="1.3" fill="#B8892F"/>
+      </svg>
+      Coffre
+    </div>
+    <button id="sign-out" class="btn small on-dark" type="button" hidden>Se déconnecter</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- Connexion / inscription -->
+  <section id="auth-view">
+    <div class="hero">
+      <h1>Tout le parcours scolaire, au même endroit.</h1>
+      <p>Bulletins, certificats, photos de classe : rangés, protégés et retrouvés en quelques secondes.</p>
+    </div>
+    <div class="panel">
+      <div class="tabs" role="tablist">
+        <button id="tab-login" class="tab" role="tab" aria-selected="true" type="button">Connexion</button>
+        <button id="tab-signup" class="tab" role="tab" aria-selected="false" type="button">Créer un compte</button>
+      </div>
+      <form id="auth-form" novalidate>
+        <label for="email">Adresse e-mail</label>
+        <input id="email" type="email" autocomplete="email" inputmode="email" required>
+        <label for="password">Mot de passe</label>
+        <input id="password" type="password" autocomplete="current-password" minlength="8" required>
+        <p class="hint">8 caractères minimum.</p>
+        <button id="auth-submit" class="btn wide" type="submit">Se connecter</button>
+        <p id="auth-notice" class="notice" role="alert" hidden></p>
+      </form>
+    </div>
+  </section>
+
+  <!-- Coffre -->
+  <section id="app-view" hidden>
+    <div class="head">
+      <div>
+        <h2>Mes documents</h2>
+        <div id="who" class="who"></div>
+      </div>
+      <div id="count" class="who"></div>
+    </div>
+
+    <div class="tools">
+      <button id="toggle-add" class="btn" type="button" aria-expanded="false" aria-controls="upload-panel">Ajouter un document</button>
+    </div>
+
+    <div id="upload-panel" class="panel" hidden>
+      <form id="upload-form" novalidate>
+        <label for="titre" style="margin-top:0">Titre du document</label>
+        <input id="titre" type="text" required>
+        <label for="type">Type</label>
+        <select id="type">
+          <option>Bulletin</option>
+          <option>Certificat</option>
+          <option>Attestation de réussite</option>
+          <option>Diplôme</option>
+          <option>Photo d'école</option>
+          <option>Vidéo</option>
+          <option>Autre</option>
+        </select>
+        <label for="annee">Année</label>
+        <input id="annee" type="number" inputmode="numeric" min="1980" max="2100">
+        <label for="etab">Établissement</label>
+        <input id="etab" type="text" autocomplete="organization">
+        <label for="file">Fichier</label>
+        <input id="file" type="file" accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt">
+        <p class="hint">Photo, PDF, Word, Excel ou vidéo. 50 Mo maximum.</p>
+        <button id="up-submit" class="btn wide" type="submit">Enregistrer dans le coffre</button>
+        <p id="up-notice" class="notice" role="alert" hidden></p>
+      </form>
+    </div>
+
+    <label for="search" style="margin-top:18px">Rechercher</label>
+    <input id="search" type="search" placeholder="Titre, type, année, établissement">
+
+    <ul id="docs" class="docs"></ul>
+  </section>
+
+</main>
+
+<div id="toast" class="toast" role="status" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function () {
+  "use strict";
+
+  var SUPABASE_URL = "https://zccvohfllkutrisygadf.supabase.co";
+  var SUPABASE_KEY = "sb_publishable_Ro99vtshY2gyqklWUdjB_Q_hVMzU0XO";
+  var BUCKET = "coffre";
+  var MAX_BYTES = 50 * 1024 * 1024;
+
+  var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  function $(id) { return document.getElementById(id); }
+
+  var authView = $("auth-view"), appView = $("app-view"), signOutBtn = $("sign-out");
+  var authForm = $("auth-form"), authNotice = $("auth-notice");
+  var uploadPanel = $("upload-panel"), uploadForm = $("upload-form"), upNotice = $("up-notice");
+  var list = $("docs"), search = $("search"), toast = $("toast");
+
+  var mode = "login", docs = [], currentUser = null, toastTimer = null;
+
+  /* ---------- utilitaires ---------- */
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function norm(s) {
+    return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  }
+
+  function fmtSize(n) {
+    if (!n) return "";
+    if (n < 1024 * 1024) return Math.max(1, Math.round(n / 1024)) + " Ko";
+    return (n / 1024 / 1024).toFixed(1).replace(".", ",") + " Mo";
+  }
+
+  function safeName(name) {
+    return String(name).normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-80);
+  }
+
+  function uid() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  }
+
+  function setNotice(el, text, kind) {
+    el.textContent = text || "";
+    el.className = "notice " + (kind || "");
+    el.hidden = !text;
+  }
+
+  function showToast(text) {
+    toast.textContent = text;
+    toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toast.hidden = true; }, 3200);
+  }
+
+  function fr(msg) {
+    var m = String(msg || "").toLowerCase();
+    if (m.indexOf("invalid login") > -1) return "Adresse e-mail ou mot de passe incorrect.";
+    if (m.indexOf("email not confirmed") > -1) return "Adresse e-mail non confirmée. Ouvrez le message de confirmation reçu par e-mail.";
+    if (m.indexOf("rate limit") > -1 || m.indexOf("too many") > -1) return "Trop de tentatives. Patientez quelques minutes puis réessayez.";
+    if (m.indexOf("already registered") > -1) return "Un compte existe déjà avec cette adresse. Utilisez l'onglet Connexion.";
+    if (m.indexOf("failed to fetch") > -1 || m.indexOf("network") > -1) return "Connexion impossible. Vérifiez votre connexion internet.";
+    if (m.indexOf("row-level security") > -1) return "Accès refusé. Reconnectez-vous puis réessayez.";
+    return "Une erreur est survenue : " + msg;
+  }
+
+  /* ---------- connexion / inscription ---------- */
+
+  function setMode(m) {
+    mode = m;
+    $("tab-login").setAttribute("aria-selected", String(m === "login"));
+    $("tab-signup").setAttribute("aria-selected", String(m === "signup"));
+    $("auth-submit").textContent = m === "login" ? "Se connecter" : "Créer mon compte";
+    $("password").autocomplete = m === "login" ? "current-password" : "new-password";
+    setNotice(authNotice, "");
+  }
+  $("tab-login").addEventListener("click", function () { setMode("login"); });
+  $("tab-signup").addEventListener("click", function () { setMode("signup"); });
+
+  authForm.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var email = $("email").value.trim();
+    var password = $("password").value;
+    if (!email || !password) { setNotice(authNotice, "Saisissez votre adresse e-mail et votre mot de passe.", "error"); return; }
+    if (mode === "signup" && password.length < 8) { setNotice(authNotice, "Le mot de passe doit contenir au moins 8 caractères.", "error"); return; }
+
+    var btn = $("auth-submit");
+    btn.disabled = true;
+    setNotice(authNotice, "");
+    try {
+      if (mode === "login") {
+        var r = await db.auth.signInWithPassword({ email: email, password: password });
+        if (r.error) throw r.error;
+      } else {
+        var s = await db.auth.signUp({ email: email, password: password });
+        if (s.error) throw s.error;
+        if (!s.data.session) {
+          setNotice(authNotice, "Compte créé. Ouvrez le message de confirmation envoyé à votre adresse e-mail, puis revenez vous connecter.", "ok");
+        }
+      }
+    } catch (err) {
+      setNotice(authNotice, fr(err.message), "error");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  signOutBtn.addEventListener("click", function () { db.auth.signOut(); });
+
+  function enterApp(user) {
+    if (currentUser && currentUser.id === user.id) return;
+    currentUser = user;
+    authView.hidden = true;
+    appView.hidden = false;
+    signOutBtn.hidden = false;
+    $("who").textContent = user.email || "";
+    loadDocs();
+  }
+
+  function leaveApp() {
+    currentUser = null;
+    docs = [];
+    renderDocs();
+    appView.hidden = true;
+    authView.hidden = false;
+    signOutBtn.hidden = true;
+    uploadPanel.hidden = true;
+    $("password").value = "";
+  }
+
+  db.auth.onAuthStateChange(function (_event, session) {
+    setTimeout(function () {
+      if (session && session.user) enterApp(session.user); else leaveApp();
+    }, 0);
+  });
+
+  /* ---------- documents ---------- */
+
+  async function loadDocs() {
+    var r = await db.from("documents").select("*").order("cree_le", { ascending: false });
+    if (r.error) { showToast(fr(r.error.message)); return; }
+    docs = r.data || [];
+    renderDocs();
+  }
+
+  function renderDocs() {
+    var q = norm(search.value);
+    var shown = docs.filter(function (d) {
+      return !q || norm([d.titre, d.type, d.etablissement, d.annee].join(" ")).indexOf(q) > -1;
+    });
+    $("count").textContent = docs.length ? docs.length + (docs.length > 1 ? " documents" : " document") : "";
+
+    if (!docs.length) {
+      list.innerHTML = '<li class="empty"><strong>Votre coffre est vide.</strong>Ajoutez votre premier document : un bulletin, un certificat, une attestation.</li>';
+      return;
+    }
+    if (!shown.length) {
+      list.innerHTML = '<li class="empty"><strong>Aucun résultat.</strong>Essayez un autre mot, ou une autre année.</li>';
+      return;
+    }
+    list.innerHTML = shown.map(function (d) {
+      var meta = [d.type, d.annee, d.etablissement, fmtSize(d.taille_octets)].filter(Boolean).join(", ");
+      return '<li class="doc">' +
+        '<strong>' + esc(d.titre) + '</strong>' +
+        '<div class="meta">' + esc(meta) + '</div>' +
+        '<div class="doc-actions">' +
+          '<button class="btn small" type="button" data-act="open" data-id="' + esc(d.id) + '">Ouvrir</button>' +
+          '<button class="btn small danger" type="button" data-act="del" data-id="' + esc(d.id) + '">Supprimer</button>' +
+        '</div></li>';
+    }).join("");
+  }
+
+  search.addEventListener("input", renderDocs);
+
+  list.addEventListener("click", function (e) {
+    var btn = e.target.closest("button[data-act]");
+    if (!btn) return;
+    var d = docs.find(function (x) { return x.id === btn.getAttribute("data-id"); });
+    if (!d) return;
+    if (btn.getAttribute("data-act") === "open") openDoc(d); else deleteDoc(d);
+  });
+
+  async function openDoc(d) {
+    var w = window.open("", "_blank");
+    var r = await db.storage.from(BUCKET).createSignedUrl(d.chemin_fichier, 120);
+    if (r.error) {
+      if (w) w.close();
+      showToast("Impossible d'ouvrir ce document.");
+      return;
+    }
+    if (w) w.location.href = r.data.signedUrl; else window.location.href = r.data.signedUrl;
+  }
+
+  async function deleteDoc(d) {
+    if (!window.confirm("Supprimer « " + d.titre + " » définitivement ?")) return;
+    var f = await db.storage.from(BUCKET).remove([d.chemin_fichier]);
+    if (f.error) { showToast("Suppression impossible : " + fr(f.error.message)); return; }
+    var r = await db.from("documents").delete().eq("id", d.id);
+    if (r.error) { showToast("Suppression impossible : " + fr(r.error.message)); return; }
+    showToast("Document supprimé.");
+    loadDocs();
+  }
+
+  /* ---------- ajout ---------- */
+
+  $("toggle-add").addEventListener("click", function () {
+    var open = uploadPanel.hidden;
+    uploadPanel.hidden = !open;
+    this.setAttribute("aria-expanded", String(open));
+    if (open) {
+      if (!$("annee").value) $("annee").value = new Date().getFullYear();
+      $("titre").focus();
+    }
+  });
+
+  uploadForm.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var file = $("file").files[0];
+    var titre = $("titre").value.trim();
+    if (!titre) { setNotice(upNotice, "Donnez un titre au document.", "error"); return; }
+    if (!file) { setNotice(upNotice, "Choisissez un fichier à ajouter.", "error"); return; }
+    if (file.size > MAX_BYTES) { setNotice(upNotice, "Ce fichier dépasse 50 Mo. Choisissez un fichier plus léger.", "error"); return; }
+
+    var btn = $("up-submit");
+    btn.disabled = true;
+    btn.textContent = "Envoi en cours…";
+    setNotice(upNotice, "");
+
+    var path = currentUser.id + "/" + uid() + "-" + safeName(file.name);
+    try {
+      var up = await db.storage.from(BUCKET).upload(path, file, {
+        contentType: file.type || "application/octet-stream"
+      });
+      if (up.error) throw up.error;
+
+      var ins = await db.from("documents").insert({
+        titre: titre,
+        type: $("type").value,
+        annee: $("annee").value ? Number($("annee").value) : null,
+        etablissement: $("etab").value.trim() || null,
+        chemin_fichier: path,
+        taille_octets: file.size
+      });
+      if (ins.error) {
+        await db.storage.from(BUCKET).remove([path]);
+        throw ins.error;
+      }
+
+      uploadForm.reset();
+      $("annee").value = new Date().getFullYear();
+      uploadPanel.hidden = true;
+      $("toggle-add").setAttribute("aria-expanded", "false");
+      showToast("Document ajouté au coffre.");
+      await loadDocs();
+    } catch (err) {
+      setNotice(upNotice, fr(err.message), "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Enregistrer dans le coffre";
+    }
+  });
+})();
+</script>
+</body>
+</html>
