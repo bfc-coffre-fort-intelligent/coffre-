@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#12372A">
-<link rel="manifest" href="manifest.json"> 
+<link rel="manifest" href="manifest.json">
 <title>Coffre, vos documents scolaires</title>
 <style>
 :root{
@@ -60,6 +60,12 @@ input[type=file]{height:auto;padding:10px 12px}
 .who{color:var(--muted);font-size:14px;overflow-wrap:anywhere}
 .tools{display:grid;gap:10px;margin-bottom:14px}
 
+.profiles{display:flex;gap:8px;overflow-x:auto;padding:4px 0 12px;margin:0 0 4px;-webkit-overflow-scrolling:touch}
+.profile-chip{flex:none;min-height:44px;padding:0 16px;border-radius:999px;border:1.5px solid var(--line);
+  background:#fff;color:var(--ink);font-weight:600;cursor:pointer;white-space:nowrap}
+.profile-chip[aria-pressed="true"]{background:var(--pine);border-color:var(--pine);color:#fff}
+.profile-chip.add{border-style:dashed;color:var(--pine);background:var(--pine-soft)}
+
 .docs{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:10px}
 .doc{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px}
 .doc strong{display:block;overflow-wrap:anywhere}
@@ -70,6 +76,12 @@ input[type=file]{height:auto;padding:10px 12px}
 
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);max-width:calc(100% - 32px);
   background:var(--pine);color:#fff;padding:12px 18px;border-radius:10px;font-size:15px}
+
+.modal-bg{position:fixed;inset:0;background:rgba(18,55,42,.45);display:flex;align-items:flex-end;justify-content:center;z-index:20}
+.modal{background:#fff;border-radius:16px 16px 0 0;padding:20px 16px 26px;width:100%;max-width:560px}
+.modal h2{font-size:20px;margin-bottom:12px}
+.modal-actions{display:flex;gap:10px;margin-top:16px}
+.modal-actions .btn{flex:1}
 </style>
 </head>
 <body>
@@ -90,7 +102,6 @@ input[type=file]{height:auto;padding:10px 12px}
 
 <main>
 
-  <!-- Connexion / inscription -->
   <section id="auth-view">
     <div class="hero">
       <h1>Tout le parcours scolaire, au même endroit.</h1>
@@ -113,7 +124,6 @@ input[type=file]{height:auto;padding:10px 12px}
     </div>
   </section>
 
-  <!-- Coffre -->
   <section id="app-view" hidden>
     <div class="head">
       <div>
@@ -122,6 +132,8 @@ input[type=file]{height:auto;padding:10px 12px}
       </div>
       <div id="count" class="who"></div>
     </div>
+
+    <div id="profiles" class="profiles" role="tablist" aria-label="Profils"></div>
 
     <div class="tools">
       <button id="toggle-add" class="btn" type="button" aria-expanded="false" aria-controls="upload-panel">Ajouter un document</button>
@@ -161,6 +173,21 @@ input[type=file]{height:auto;padding:10px 12px}
 
 </main>
 
+<div id="profile-modal-bg" class="modal-bg" hidden>
+  <div class="modal">
+    <h2>Ajouter un profil</h2>
+    <form id="profile-form" novalidate>
+      <label for="profile-name" style="margin-top:0">Prénom de l'enfant, ou nom du profil</label>
+      <input id="profile-name" type="text" required autocomplete="off">
+      <p id="profile-notice" class="notice" role="alert" hidden></p>
+      <div class="modal-actions">
+        <button id="profile-cancel" class="btn ghost" type="button">Annuler</button>
+        <button class="btn" type="submit">Ajouter</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div id="toast" class="toast" role="status" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -181,10 +208,11 @@ input[type=file]{height:auto;padding:10px 12px}
   var authForm = $("auth-form"), authNotice = $("auth-notice");
   var uploadPanel = $("upload-panel"), uploadForm = $("upload-form"), upNotice = $("up-notice");
   var list = $("docs"), search = $("search"), toast = $("toast");
+  var profilesBar = $("profiles");
+  var profileModalBg = $("profile-modal-bg"), profileForm = $("profile-form"), profileNotice = $("profile-notice");
 
-  var mode = "login", docs = [], currentUser = null, toastTimer = null;
-
-  /* ---------- utilitaires ---------- */
+  var mode = "login", docs = [], profiles = [], currentUser = null, toastTimer = null;
+  var selectedProfileId = "self";
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -236,8 +264,6 @@ input[type=file]{height:auto;padding:10px 12px}
     return "Une erreur est survenue : " + msg;
   }
 
-  /* ---------- connexion / inscription ---------- */
-
   function setMode(m) {
     mode = m;
     $("tab-login").setAttribute("aria-selected", String(m === "login"));
@@ -286,13 +312,17 @@ input[type=file]{height:auto;padding:10px 12px}
     appView.hidden = false;
     signOutBtn.hidden = false;
     $("who").textContent = user.email || "";
+    selectedProfileId = "self";
+    loadProfiles();
     loadDocs();
   }
 
   function leaveApp() {
     currentUser = null;
     docs = [];
+    profiles = [];
     renderDocs();
+    renderProfiles();
     appView.hidden = true;
     authView.hidden = false;
     signOutBtn.hidden = true;
@@ -306,7 +336,65 @@ input[type=file]{height:auto;padding:10px 12px}
     }, 0);
   });
 
-  /* ---------- documents ---------- */
+  async function loadProfiles() {
+    var r = await db.from("profils").select("*").order("cree_le", { ascending: true });
+    if (r.error) { showToast(fr(r.error.message)); return; }
+    profiles = r.data || [];
+    renderProfiles();
+  }
+
+  function renderProfiles() {
+    var chips = [];
+    chips.push(
+      '<button class="profile-chip" type="button" role="tab" data-id="self" aria-pressed="' +
+      (selectedProfileId === "self") + '">Moi-même</button>'
+    );
+    profiles.forEach(function (p) {
+      chips.push(
+        '<button class="profile-chip" type="button" role="tab" data-id="' + esc(p.id) + '" aria-pressed="' +
+        (selectedProfileId === p.id) + '">' + esc(p.nom) + '</button>'
+      );
+    });
+    chips.push('<button class="profile-chip add" type="button" id="add-profile">+ Ajouter un profil</button>');
+    profilesBar.innerHTML = chips.join("");
+
+    profilesBar.querySelectorAll(".profile-chip[data-id]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        selectedProfileId = btn.getAttribute("data-id");
+        renderProfiles();
+        renderDocs();
+      });
+    });
+    var addBtn = $("add-profile");
+    if (addBtn) addBtn.addEventListener("click", openProfileModal);
+  }
+
+  function openProfileModal() {
+    profileForm.reset();
+    setNotice(profileNotice, "");
+    profileModalBg.hidden = false;
+    $("profile-name").focus();
+  }
+  function closeProfileModal() { profileModalBg.hidden = true; }
+
+  $("profile-cancel").addEventListener("click", closeProfileModal);
+  profileModalBg.addEventListener("click", function (e) {
+    if (e.target === profileModalBg) closeProfileModal();
+  });
+
+  profileForm.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var nom = $("profile-name").value.trim();
+    if (!nom) { setNotice(profileNotice, "Donnez un nom à ce profil.", "error"); return; }
+    var r = await db.from("profils").insert({ nom: nom }).select().single();
+    if (r.error) { setNotice(profileNotice, fr(r.error.message), "error"); return; }
+    profiles.push(r.data);
+    selectedProfileId = r.data.id;
+    closeProfileModal();
+    renderProfiles();
+    renderDocs();
+    showToast("Profil « " + nom + " » ajouté.");
+  });
 
   async function loadDocs() {
     var r = await db.from("documents").select("*").order("cree_le", { ascending: false });
@@ -315,15 +403,23 @@ input[type=file]{height:auto;padding:10px 12px}
     renderDocs();
   }
 
+  function docsForSelectedProfile() {
+    if (selectedProfileId === "self") {
+      return docs.filter(function (d) { return !d.profil_id; });
+    }
+    return docs.filter(function (d) { return d.profil_id === selectedProfileId; });
+  }
+
   function renderDocs() {
     var q = norm(search.value);
-    var shown = docs.filter(function (d) {
+    var scoped = docsForSelectedProfile();
+    var shown = scoped.filter(function (d) {
       return !q || norm([d.titre, d.type, d.etablissement, d.annee].join(" ")).indexOf(q) > -1;
     });
-    $("count").textContent = docs.length ? docs.length + (docs.length > 1 ? " documents" : " document") : "";
+    $("count").textContent = docs.length ? docs.length + (docs.length > 1 ? " documents au total" : " document au total") : "";
 
-    if (!docs.length) {
-      list.innerHTML = '<li class="empty"><strong>Votre coffre est vide.</strong>Ajoutez votre premier document : un bulletin, un certificat, une attestation.</li>';
+    if (!scoped.length) {
+      list.innerHTML = '<li class="empty"><strong>Ce coffre est vide.</strong>Ajoutez un premier document pour ce profil.</li>';
       return;
     }
     if (!shown.length) {
@@ -373,8 +469,6 @@ input[type=file]{height:auto;padding:10px 12px}
     loadDocs();
   }
 
-  /* ---------- ajout ---------- */
-
   $("toggle-add").addEventListener("click", function () {
     var open = uploadPanel.hidden;
     uploadPanel.hidden = !open;
@@ -411,7 +505,8 @@ input[type=file]{height:auto;padding:10px 12px}
         annee: $("annee").value ? Number($("annee").value) : null,
         etablissement: $("etab").value.trim() || null,
         chemin_fichier: path,
-        taille_octets: file.size
+        taille_octets: file.size,
+        profil_id: selectedProfileId === "self" ? null : selectedProfileId
       });
       if (ins.error) {
         await db.storage.from(BUCKET).remove([path]);
