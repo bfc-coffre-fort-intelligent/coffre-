@@ -191,3 +191,382 @@ input[type=file]{height:auto;padding:10px 12px}
 <div id="toast" class="toast" role="status" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function () {
+  "use strict";
+
+  var SUPABASE_URL = "https://zccvohfllkutrisygadf.supabase.co";
+  var SUPABASE_KEY = "sb_publishable_Ro99vtshY2gyqklWUdjB_Q_hVMzU0XO";
+  var BUCKET = "coffre";
+  var MAX_BYTES = 50 * 1024 * 1024;
+
+  var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  function $(id) { return document.getElementById(id); }
+
+  var authView = $("auth-view"), appView = $("app-view"), signOutBtn = $("sign-out");
+  var authForm = $("auth-form"), authNotice = $("auth-notice");
+  var uploadPanel = $("upload-panel"), uploadForm = $("upload-form"), upNotice = $("up-notice");
+  var list = $("docs"), search = $("search"), toast = $("toast");
+  var profilesBar = $("profiles");
+  var profileModalBg = $("profile-modal-bg"), profileForm = $("profile-form"), profileNotice = $("profile-notice");
+
+  var mode = "login", docs = [], profiles = [], currentUser = null, toastTimer = null;
+  var selectedProfileId = "self";
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function norm(s) {
+    return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  }
+
+  function fmtSize(n) {
+    if (!n) return "";
+    if (n < 1024 * 1024) return Math.max(1, Math.round(n / 1024)) + " Ko";
+    return (n / 1024 / 1024).toFixed(1).replace(".", ",") + " Mo";
+  }
+
+  function safeName(name) {
+    return String(name).normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-80);
+  }
+
+  function uid() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  }
+
+  function setNotice(el, text, kind) {
+    el.textContent = text || "";
+    el.className = "notice " + (kind || "");
+    el.hidden = !text;
+  }
+
+  function showToast(text) {
+    toast.textContent = text;
+    toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toast.hidden = true; }, 3200);
+  }
+
+  function fr(msg) {
+    var m = String(msg || "").toLowerCase();
+    if (m.indexOf("invalid login") > -1) return "Adresse e-mail ou mot de passe incorrect.";
+    if (m.indexOf("email not confirmed") > -1) return "Adresse e-mail non confirmée. Ouvrez le message de confirmation reçu par e-mail.";
+    if (m.indexOf("rate limit") > -1 || m.indexOf("too many") > -1) return "Trop de tentatives. Patientez quelques minutes puis réessayez.";
+    if (m.indexOf("already registered") > -1) return "Un compte existe déjà avec cette adresse. Utilisez l'onglet Connexion.";
+    if (m.indexOf("failed to fetch") > -1 || m.indexOf("network") > -1) return "Connexion impossible. Vérifiez votre connexion internet.";
+    if (m.indexOf("row-level security") > -1) return "Accès refusé. Reconnectez-vous puis réessayez.";
+    return "Une erreur est survenue : " + msg;
+  }
+
+  function setMode(m) {
+    mode = m;
+    $("tab-login").setAttribute("aria-selected", String(m === "login"));
+    $("tab-signup").setAttribute("aria-selected", String(m === "signup"));
+    $("auth-submit").textContent = m === "login" ? "Se connecter" : "Créer mon compte";
+    $("password").autocomplete = m === "login" ? "current-password" : "new-password";
+    setNotice(authNotice, "");
+  }
+  $("tab-login").addEventListener("click", function () { setMode("login"); });
+  $("tab-signup").addEventListener("click", function () { setMode("signup"); });
+
+  authForm.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var email = $("email").value.trim();
+    var password = $("password").value;
+    if (!email || !password) { setNotice(authNotice, "Saisissez votre adresse e-mail et votre mot de passe.", "error"); return; }
+    if (mode === "signup" && password.length < 8) { setNotice(authNotice, "Le mot de passe doit contenir au moins 8 caractères.", "error"); return; }
+
+    var btn = $("auth-submit");
+    btn.disabled = true;
+    setNotice(authNotice, "");
+    try {
+      if (mode === "login") {
+        var r = await db.auth.signInWithPassword({ email: email, password: password });
+        if (r.error) throw r.error;
+      } else {
+        var s = await db.auth.signUp({ email: email, password: password });
+        if (s.error) throw s.error;
+        if (!s.data.session) {
+          setNotice(authNotice, "Compte créé. Ouvrez le message de confirmation envoyé à votre adresse e-mail, puis revenez vous connecter.", "ok");
+        }
+      }
+    } catch (err) {
+      setNotice(authNotice, fr(err.message), "error");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  signOutBtn.addEventListener("click", function () { db.auth.signOut(); });
+
+  function enterApp(user) {
+    if (currentUser && currentUser.id === user.id) return;
+    currentUser = user;
+    authView.hidden = true;
+    appView.hidden = false;
+    signOutBtn.hidden = false;
+    $("who").textContent = user.email || "";
+    selectedProfileId = "self";
+    loadProfiles();
+    loadDocs();
+  }
+
+  function leaveApp() {
+    currentUser = null;
+    docs = [];
+    profiles = [];
+    renderDocs();
+    renderProfiles();
+    appView.hidden = true;
+    authView.hidden = false;
+    signOutBtn.hidden = true;
+    uploadPanel.hidden = true;
+    $("password").value = "";
+  }
+
+  db.auth.onAuthStateChange(function (_event, session) {
+    setTimeout(function () {
+      if (session && session.user) enterApp(session.user); else leaveApp();
+    }, 0);
+  });
+
+  async function loadProfiles() {
+    var r = await db.from("profils").select("*").order("cree_le", { ascending: true });
+    if (r.error) { showToast(fr(r.error.message)); return; }
+    profiles = r.data || [];
+    renderProfiles();
+  }
+
+  function renderProfiles() {
+    var chips = [];
+    chips.push(
+      '<button class="profile-chip" type="button" role="tab" data-id="self" aria-pressed="' +
+      (selectedProfileId === "self") + '">Moi-même</button>'
+    );
+    profiles.forEach(function (p) {
+      chips.push(
+        '<button class="profile-chip" type="button" role="tab" data-id="' + esc(p.id) + '" aria-pressed="' +
+        (selectedProfileId === p.id) + '">' + esc(p.nom) + '</button>'
+      );
+    });
+    chips.push('<button class="profile-chip add" type="button" id="add-profile">+ Ajouter un profil</button>');
+    profilesBar.innerHTML = chips.join("");
+
+    profilesBar.querySelectorAll(".profile-chip[data-id]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        selectedProfileId = btn.getAttribute("data-id");
+        renderProfiles();
+        renderDocs();
+      });
+    });
+    var addBtn = $("add-profile");
+    if (addBtn) addBtn.addEventListener("click", openProfileModal);
+  }
+
+  function openProfileModal() {
+    profileForm.reset();
+    setNotice(profileNotice, "");
+    profileModalBg.hidden = false;
+    $("profile-name").focus();
+  }
+  function closeProfileModal() { profileModalBg.hidden = true; }
+
+  $("profile-cancel").addEventListener("click", closeProfileModal);
+  profileModalBg.addEventListener("click", function (e) {
+    if (e.target === profileModalBg) closeProfileModal();
+  });
+
+  profileForm.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var nom = $("profile-name").value.trim();
+    if (!nom) { setNotice(profileNotice, "Donnez un nom à ce profil.", "error"); return; }
+    var r = await db.from("profils").insert({ nom: nom }).select().single();
+    if (r.error) { setNotice(profileNotice, fr(r.error.message), "error"); return; }
+    profiles.push(r.data);
+    selectedProfileId = r.data.id;
+    closeProfileModal();
+    renderProfiles();
+    renderDocs();
+    showToast("Profil « " + nom + " » ajouté.");
+  });
+
+  async function loadDocs() {
+    var r = await db.from("documents").select("*").order("cree_le", { ascending: false });
+    if (r.error) { showToast(fr(r.error.message)); return; }
+    docs = r.data || [];
+    renderDocs();
+  }
+
+  function docsForSelectedProfile() {
+    if (selectedProfileId === "self") {
+      return docs.filter(function (d) { return !d.profil_id; });
+    }
+    return docs.filter(function (d) { return d.profil_id === selectedProfileId; });
+  }
+
+  function renderDocs() {
+    var q = norm(search.value);
+    var scoped = docsForSelectedProfile();
+    var shown = scoped.filter(function (d) {
+      return !q || norm([d.titre, d.type, d.etablissement, d.annee].join(" ")).indexOf(q) > -1;
+    });
+    $("count").textContent = docs.length ? docs.length + (docs.length > 1 ? " documents au total" : " document au total") : "";
+
+    if (!scoped.length) {
+      list.innerHTML = '<li class="empty"><strong>Ce coffre est vide.</strong>Ajoutez un premier document pour ce profil.</li>';
+      return;
+    }
+    if (!shown.length) {
+      list.innerHTML = '<li class="empty"><strong>Aucun résultat.</strong>Essayez un autre mot, ou une autre année.</li>';
+      return;
+    }
+    list.innerHTML = shown.map(function (d) {
+      var meta = [d.type, d.annee, d.etablissement, fmtSize(d.taille_octets)].filter(Boolean).join(", ");
+      return '<li class="doc">' +
+        '<strong>' + esc(d.titre) + '</strong>' +
+        '<div class="meta">' + esc(meta) + '</div>' +
+        '<div class="doc-actions">' +
+          '<button class="btn small" type="button" data-act="open" data-id="' + esc(d.id) + '">Ouvrir</button>' +
+          '<button class="btn small danger" type="button" data-act="del" data-id="' + esc(d.id) + '">Supprimer</button>' +
+        '</div></li>';
+    }).join("");
+  }
+
+  search.addEventListener("input", renderDocs);
+
+  list.addEventListener("click", function (e) {
+    var btn = e.target.closest("button[data-act]");
+    if (!btn) return;
+    var d = docs.find(function (x) { return x.id === btn.getAttribute("data-id"); });
+    if (!d) return;
+    if (btn.getAttribute("data-act") === "open") openDoc(d); else deleteDoc(d);
+  });
+
+  async function openDoc(d) {
+    var w = window.open("", "_blank");
+    var r = await db.storage.from(BUCKET).createSignedUrl(d.chemin_fichier, 120);
+    if (r.error) {
+      if (w) w.close();
+      showToast("Impossible d'ouvrir ce document.");
+      return;
+    }
+    if (w) w.location.href = r.data.signedUrl; else window.location.href = r.data.signedUrl;
+  }
+
+  async function deleteDoc(d) {
+    if (!window.confirm("Supprimer « " + d.titre + " » définitivement ?")) return;
+    var f = await db.storage.from(BUCKET).remove([d.chemin_fichier]);
+    if (f.error) { showToast("Suppression impossible : " + fr(f.error.message)); return; }
+    var r = await db.from("documents").delete().eq("id", d.id);
+    if (r.error) { showToast("Suppression impossible : " + fr(r.error.message)); return; }
+    showToast("Document supprimé.");
+    loadDocs();
+  }
+
+  $("toggle-add").addEventListener("click", function () {
+    var open = uploadPanel.hidden;
+    uploadPanel.hidden = !open;
+    this.setAttribute("aria-expanded", String(open));
+    if (open) {
+      if (!$("annee").value) $("annee").value = new Date().getFullYear();
+      $("titre").focus();
+    }
+  });
+
+  function fileToBase64(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        var result = reader.result;
+        var base64 = result.slice(result.indexOf(",") + 1);
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  $("file").addEventListener("change", async function () {
+    var file = this.files[0];
+    if (!file || file.type.indexOf("image/") !== 0) return;
+
+    setNotice(upNotice, "Analyse du document par l'IA…", "");
+    try {
+      var base64 = await fileToBase64(file);
+      var res = await db.functions.invoke("classer-document", {
+        body: { image: base64, mediaType: file.type }
+      });
+      if (res.error) throw res.error;
+      var s = res.data || {};
+      if (s.titre && !$("titre").value) $("titre").value = s.titre;
+      if (s.type) {
+        var options = $("type").options;
+        for (var i = 0; i < options.length; i++) {
+          if (options[i].value === s.type) { $("type").value = s.type; break; }
+        }
+      }
+      if (s.annee && !$("annee").value) $("annee").value = s.annee;
+      if (s.etablissement && !$("etab").value) $("etab").value = s.etablissement;
+      setNotice(upNotice, "Suggestions ajoutées par l'IA. Vérifiez avant d'enregistrer.", "ok");
+    } catch (err) {
+      setNotice(upNotice, "");
+    }
+  });
+
+  uploadForm.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var file = $("file").files[0];
+    var titre = $("titre").value.trim();
+    if (!titre) { setNotice(upNotice, "Donnez un titre au document.", "error"); return; }
+    if (!file) { setNotice(upNotice, "Choisissez un fichier à ajouter.", "error"); return; }
+    if (file.size > MAX_BYTES) { setNotice(upNotice, "Ce fichier dépasse 50 Mo. Choisissez un fichier plus léger.", "error"); return; }
+
+    var btn = $("up-submit");
+    btn.disabled = true;
+    btn.textContent = "Envoi en cours…";
+    setNotice(upNotice, "");
+
+    var path = currentUser.id + "/" + uid() + "-" + safeName(file.name);
+    try {
+      var up = await db.storage.from(BUCKET).upload(path, file, {
+        contentType: file.type || "application/octet-stream"
+      });
+      if (up.error) throw up.error;
+
+      var ins = await db.from("documents").insert({
+        titre: titre,
+        type: $("type").value,
+        annee: $("annee").value ? Number($("annee").value) : null,
+        etablissement: $("etab").value.trim() || null,
+        chemin_fichier: path,
+        taille_octets: file.size,
+        profil_id: selectedProfileId === "self" ? null : selectedProfileId
+      });
+      if (ins.error) {
+        await db.storage.from(BUCKET).remove([path]);
+        throw ins.error;
+      }
+
+      uploadForm.reset();
+      $("annee").value = new Date().getFullYear();
+      uploadPanel.hidden = true;
+      $("toggle-add").setAttribute("aria-expanded", "false");
+      showToast("Document ajouté au coffre.");
+      await loadDocs();
+    } catch (err) {
+      setNotice(upNotice, fr(err.message), "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Enregistrer dans le coffre";
+    }
+  });
+})();
+</script>
+</body>
+</html>
