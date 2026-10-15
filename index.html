@@ -290,7 +290,7 @@ input[type=file]{height:auto;padding:10px 12px}
         var r = await db.auth.signInWithPassword({ email: email, password: password });
         if (r.error) throw r.error;
       } else {
-        var s = await db.auth.signUp({ email: email, password: password });
+        var s = await db.auth.signUp({ email: email, password: password, options: { emailRedirectTo: location.origin + location.pathname } });
         if (s.error) throw s.error;
         if (!s.data.session) {
           setNotice(authNotice, "Compte créé. Ouvrez le message de confirmation envoyé à votre adresse e-mail, puis revenez vous connecter.", "ok");
