@@ -400,6 +400,65 @@ try {
     });
   }
 } catch (e) {}
+ (function () {
+  var MAX = 2000, QUALITY = 0.82, keep = false;
+  function shrink(file) {
+    return new Promise(function (resolve) {
+      if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return resolve(file);
+      var img = new Image(), url = URL.createObjectURL(file);
+      img.onload = function () {
+        var w = img.naturalWidth, h = img.naturalHeight;
+        var s = Math.min(1, MAX / Math.max(w, h));
+        var cv = document.createElement("canvas");
+        cv.width = Math.round(w * s);
+        cv.height = Math.round(h * s);
+        var cx = cv.getContext("2d");
+        cx.fillStyle = "#fff";
+        cx.fillRect(0, 0, cv.width, cv.height);
+        cx.drawImage(img, 0, 0, cv.width, cv.height);
+        URL.revokeObjectURL(url);
+        cv.toBlob(function (b) {
+          if (!b || b.size >= file.size) return resolve(file);
+          var name = file.name.replace(/\.[^.]+$/, "") + ".jpg";
+          resolve(new File([b], name, { type: "image/jpeg" }));
+        }, "image/jpeg", QUALITY);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); resolve(file); };
+      img.src = url;
+    });
+  }
+  function addOption(input) {
+    if (input.dataset.opt || !input.parentNode) return;
+    input.dataset.opt = "1";
+    var l = document.createElement("label");
+    l.style.cssText = "display:flex;gap:8px;align-items:center;margin-top:8px;font-size:14px";
+    var c = document.createElement("input");
+    c.type = "checkbox";
+    c.style.width = "auto";
+    c.addEventListener("click", function () { keep = c.checked; });
+    l.appendChild(c);
+    l.appendChild(document.createTextNode("Garder la photo originale (plus lourde)"));
+    input.parentNode.insertBefore(l, input.nextSibling);
+  }
+  document.querySelectorAll('input[type="file"]').forEach(addOption);
+  document.addEventListener("change", function (e) {
+    var input = e.target;
+    if (!input || input.type !== "file") return;
+    if (input._done) { input._done = false; return; }
+    if (keep || !input.files || !input.files.length) return;
+    e.stopImmediatePropagation();
+    function go() {
+      input._done = true;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    Promise.all(Array.prototype.map.call(input.files, shrink)).then(function (list) {
+      var dt = new DataTransfer();
+      list.forEach(function (f) { dt.items.add(f); });
+      input.files = dt.files;
+      go();
+    }).catch(go);
+  }, true);
+})();
   async function loadProfiles() {
     var r = await db.from("profils").select("*").order("cree_le", { ascending: true });
     if (r.error) { showToast(fr(r.error.message)); return; }
