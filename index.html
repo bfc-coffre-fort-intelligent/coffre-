@@ -459,6 +459,72 @@ try {
     }).catch(go);
   }, true);
 })();
+  (function () {
+  var LIMIT = 3 * 1024 * 1024 * 1024;
+  var used = 0, box = null, timer = null;
+  function fmt(n) {
+    if (n >= 1073741824) return (n / 1073741824).toFixed(2).replace(".", ",") + " Go";
+    return (n / 1048576).toFixed(1).replace(".", ",") + " Mo";
+  }
+  function build() {
+    if (box && document.body.contains(box)) return true;
+    var h = appView.querySelector("h1, h2");
+    if (!h) return false;
+    var anchor = h.nextElementSibling && h.nextElementSibling.tagName === "P" ? h.nextElementSibling : h;
+    box = document.createElement("div");
+    box.id = "quota";
+    box.style.cssText = "margin:12px 0";
+    box.innerHTML = '<div id="quota-text" style="font-size:14px;margin-bottom:6px"></div><div style="height:8px;border-radius:4px;background:#DDE3DC;overflow:hidden"><div id="quota-bar" style="height:100%;width:0;background:#14352A"></div></div><p id="quota-warn" style="font-size:13px;margin:6px 0 0;color:#8A5A00" hidden></p><button id="quota-more" type="button" class="btn ghost small" style="margin-top:8px">Augmenter mon espace</button>';
+    anchor.parentNode.insertBefore(box, anchor.nextSibling);
+    box.querySelector("#quota-more").addEventListener("click", function () {
+      showToast("L'achat d'espace supplémentaire sera bientôt disponible.");
+    });
+    return true;
+  }
+  function render() {
+    if (!build()) return;
+    var pct = Math.min(100, used / LIMIT * 100);
+    var bar = box.querySelector("#quota-bar");
+    var color = pct >= 95 ? "#B3261E" : pct >= 80 ? "#C48A2C" : "#14352A";
+    box.querySelector("#quota-text").textContent = "Espace utilisé : " + fmt(used) + " sur 3 Go";
+    bar.style.width = pct.toFixed(1) + "%";
+    bar.style.background = color;
+    var w = box.querySelector("#quota-warn");
+    if (pct >= 90) {
+      w.textContent = pct >= 100 ? "Votre coffre est plein." : "Votre coffre est presque plein.";
+      w.hidden = false;
+    } else {
+      w.hidden = true;
+    }
+  }
+  async function refresh() {
+    try {
+      var r = await db.from("documents").select("taille_octets");
+      if (r.error || !r.data) return;
+      used = 0;
+      r.data.forEach(function (d) { used += Number(d.taille_octets) || 0; });
+      render();
+    } catch (e) {}
+  }
+  new MutationObserver(function (muts) {
+    if (muts.every(function (m) { return box && box.contains(m.target); })) return;
+    clearTimeout(timer);
+    timer = setTimeout(refresh, 1500);
+  }).observe(appView, { childList: true, subtree: true });
+  db.auth.onAuthStateChange(function () { setTimeout(refresh, 800); });
+  setTimeout(refresh, 1500);
+  document.addEventListener("change", function (e) {
+    var input = e.target;
+    if (!input || input.type !== "file" || !input.files || !input.files.length) return;
+    var add = 0;
+    Array.prototype.forEach.call(input.files, function (f) { add += f.size; });
+    if (used + add > LIMIT) {
+      e.stopImmediatePropagation();
+      input.value = "";
+      showToast("Espace insuffisant : votre coffre est limité à 3 Go.");
+    }
+  }, true);
+})();
   async function loadProfiles() {
     var r = await db.from("profils").select("*").order("cree_le", { ascending: true });
     if (r.error) { showToast(fr(r.error.message)); return; }
