@@ -335,6 +335,30 @@ input[type=file]{height:auto;padding:10px 12px}
       if (session && session.user) enterApp(session.user); else leaveApp();
     }, 0);
   });
+  (function () {
+  var fb = document.createElement("button");
+  fb.type = "button";
+  fb.className = "btn ghost small";
+  fb.style.marginTop = "12px";
+  fb.textContent = "Mot de passe oublié ?";
+  authForm.appendChild(fb);
+  fb.addEventListener("click", async function () {
+    var email = $("email").value.trim();
+    if (!email) { setNotice(authNotice, "Saisissez d'abord votre adresse e-mail ci-dessus.", "error"); return; }
+    var r = await db.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+    if (r.error) { setNotice(authNotice, fr(r.error.message), "error"); return; }
+    setNotice(authNotice, "Un e-mail vient d'être envoyé. Ouvrez-le pour choisir un nouveau mot de passe.", "ok");
+  });
+  db.auth.onAuthStateChange(function (event) {
+    if (event !== "PASSWORD_RECOVERY") return;
+    setTimeout(async function () {
+      var p = window.prompt("Choisissez votre nouveau mot de passe (8 caractères minimum) :");
+      if (!p || p.length < 8) { showToast("Mot de passe non modifié (8 caractères minimum)."); return; }
+      var u = await db.auth.updateUser({ password: p });
+      showToast(u.error ? fr(u.error.message) : "Mot de passe modifié.");
+    }, 500);
+  });
+})();
 
   async function loadProfiles() {
     var r = await db.from("profils").select("*").order("cree_le", { ascending: true });
