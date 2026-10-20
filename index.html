@@ -525,6 +525,251 @@ try {
     }
   }, true);
 })();
+  (function () {
+  var running = false, input, zoneInfo, progBox, progBar, progText, retryBtn, origAccept;
+
+  function addStyle() {
+    var s = document.createElement("style");
+    s.textContent =
+      "#pick-zone{border:1.5px dashed var(--line);border-radius:12px;padding:14px;background:var(--pine-soft);margin-bottom:6px}" +
+      "#pick-zone .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}" +
+      "#pick-zone .btn{width:100%;padding:0 8px}" +
+      "#pick-info{margin:10px 0 0;font-weight:600;color:var(--ink);overflow-wrap:anywhere}" +
+      "#file{position:absolute;width:1px;height:1px;min-height:0;padding:0;opacity:0;pointer-events:none}" +
+      "#more-details{margin-top:14px}" +
+      "#more-details summary{min-height:44px;display:flex;align-items:center;font-weight:600;color:var(--pine);cursor:pointer}" +
+      "#more-details summary::after{content:\"\\25BE\";margin-left:8px}" +
+      ".doc.fresh{border-color:var(--pine);box-shadow:0 0 0 3px var(--pine-soft)}";
+    document.head.appendChild(s);
+  }
+
+  function build() {
+    var form = $("upload-form");
+    input = $("file");
+    if (!form || !input || $("pick-zone")) return;
+    addStyle();
+    origAccept = input.getAttribute("accept");
+
+    var keepLabel = input.nextElementSibling;
+    var fileLabel = form.querySelector('label[for="file"]');
+    var hint = form.querySelector("p.hint");
+
+    var zone = document.createElement("div");
+    zone.id = "pick-zone";
+    zone.innerHTML =
+      '<div class="row">' +
+      '<button id="pick-cam" type="button" class="btn">Prendre une photo</button>' +
+      '<button id="pick-file" type="button" class="btn ghost">Choisir un fichier</button>' +
+      '</div><p id="pick-info"></p>';
+    form.insertBefore(zone, form.firstChild);
+    zone.appendChild(input);
+    if (keepLabel && keepLabel.tagName === "LABEL") zone.appendChild(keepLabel);
+    if (hint) zone.appendChild(hint);
+    if (fileLabel) fileLabel.hidden = true;
+    zoneInfo = $("pick-info");
+
+    var tl = form.querySelector('label[for="titre"]');
+    if (tl) { tl.textContent = "Titre (facultatif)"; tl.style.marginTop = ""; }
+    $("titre").placeholder = "Laissez vide : rempli automatiquement";
+
+    var det = document.createElement("details");
+    det.id = "more-details";
+    det.innerHTML = "<summary>Plus de détails (type, année, établissement)</summary>";
+    var first = form.querySelector('label[for="type"]');
+    var last = $("etab");
+    if (first && last) {
+      var nodes = [], n = first;
+      while (n) { nodes.push(n); if (n === last) break; n = n.nextElementSibling; }
+      first.parentNode.insertBefore(det, first);
+      nodes.forEach(function (x) { det.appendChild(x); });
+    }
+
+    var notice = $("up-notice");
+    progBox = document.createElement("div");
+    progBox.hidden = true;
+    progBox.innerHTML =
+      '<div style="height:10px;border-radius:5px;background:#DDE3DC;overflow:hidden;margin-top:14px">' +
+      '<div style="height:100%;width:0;background:#14352A;transition:width .2s"></div></div>' +
+      '<p class="hint" style="font-weight:600"></p>';
+    progBar = progBox.firstChild.firstChild;
+    progText = progBox.lastChild;
+    notice.parentNode.insertBefore(progBox, notice);
+
+    retryBtn = document.createElement("button");
+    retryBtn.type = "button";
+    retryBtn.className = "btn ghost wide";
+    retryBtn.textContent = "Réessayer";
+    retryBtn.hidden = true;
+    notice.parentNode.insertBefore(retryBtn, notice.nextSibling);
+
+    $("pick-cam").addEventListener("click", function () {
+      input.setAttribute("accept", "image/*");
+      input.setAttribute("capture", "environment");
+      input.click();
+    });
+    $("pick-file").addEventListener("click", function () {
+      if (origAccept) input.setAttribute("accept", origAccept);
+      input.removeAttribute("capture");
+      input.click();
+    });
+    input.addEventListener("change", showInfo);
+    retryBtn.addEventListener("click", run);
+
+    new MutationObserver(function () {
+      if (/Suggestions/.test(notice.textContent)) det.open = true;
+    }).observe(notice, { childList: true, characterData: true, subtree: true });
+  }
+
+  function showInfo() {
+    var f = input.files && input.files[0];
+    zoneInfo.textContent = f ? "Sélectionné : " + f.name + (f.size ? " (" + fmtSize(f.size) + ")" : "") : "";
+    retryBtn.hidden = true;
+  }
+
+  function setProgress(ratio, text) {
+    progBox.hidden = false;
+    progBar.style.width = Math.max(0, Math.min(1, ratio)) * 100 + "%";
+    progText.textContent = text || "";
+  }
+
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  function guessTitle(name) {
+    var t = String(name || "").replace(/\.[^.]+$/, "").replace(/[_\-]+/g, " ").replace(/\s+/g, " ").trim();
+    if (!t || /^(img|dsc|pxl|image|photo|scan|capture|vid|video)?[\s\d.]*$/i.test(t)) {
+      return "Document du " + new Date().toLocaleDateString("fr-FR");
+    }
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+
+  function xhrUpload(path, file, token) {
+    return new Promise(function (resolve, reject) {
+      var x = new XMLHttpRequest();
+      x.open("POST", SUPABASE_URL + "/storage/v1/object/" + BUCKET + "/" + path);
+      x.setRequestHeader("Authorization", "Bearer " + token);
+      x.setRequestHeader("apikey", SUPABASE_KEY);
+      x.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+      x.upload.onprogress = function (ev) {
+        if (ev.lengthComputable) {
+          setProgress(ev.loaded / ev.total, "Envoi en cours : " + Math.round(ev.loaded / ev.total * 100) + " %");
+        }
+      };
+      x.onload = function () {
+        if (x.status >= 200 && x.status < 300) return resolve();
+        var msg = "";
+        try { msg = JSON.parse(x.responseText).message || ""; } catch (e) {}
+        var err = new Error(msg || ("Erreur " + x.status));
+        err.status = x.status;
+        reject(err);
+      };
+      var fail = function () { var err = new Error("network"); err.network = true; reject(err); };
+      x.onerror = fail; x.ontimeout = fail; x.onabort = fail;
+      x.send(file);
+    });
+  }
+
+  async function run() {
+    if (running) return;
+    var f = input.files && input.files[0];
+    if (!f) { setNotice(upNotice, "Choisissez d'abord une photo ou un fichier.", "error"); return; }
+    if (f.size > MAX_BYTES) { setNotice(upNotice, "Ce fichier dépasse 50 Mo. Choisissez un fichier plus léger.", "error"); return; }
+
+    var titre = $("titre").value.trim();
+    if (!titre) { titre = guessTitle(f.name); $("titre").value = titre; }
+
+    running = true;
+    var btn = $("up-submit");
+    btn.disabled = true;
+    btn.textContent = "Envoi en cours…";
+    retryBtn.hidden = true;
+    setNotice(upNotice, "");
+    setProgress(0, "Préparation…");
+
+    var retryable = false;
+    try {
+      var sess = await db.auth.getSession();
+      var token = sess.data && sess.data.session && sess.data.session.access_token;
+      if (!token) { var e0 = new Error("session"); e0.session = true; throw e0; }
+
+      var path = "", ok = false;
+      for (var attempt = 1; attempt <= 3 && !ok; attempt++) {
+        path = currentUser.id + "/" + uid() + "-" + safeName(f.name);
+        try {
+          if (attempt === 1) {
+            await xhrUpload(path, f, token);
+          } else {
+            var up = await db.storage.from(BUCKET).upload(path, f, { contentType: f.type || "application/octet-stream" });
+            if (up.error) throw up.error;
+          }
+          ok = true;
+        } catch (err) {
+          var m = String(err && err.message || "").toLowerCase();
+          retryable = !!(err && err.network) || m.indexOf("failed to fetch") > -1 ||
+            m.indexOf("network") > -1 || m.indexOf("timeout") > -1 || (err && err.status >= 500);
+          if (!retryable || attempt === 3) throw err;
+          setProgress(0, "Connexion instable… nouvelle tentative (" + (attempt + 1) + "/3)");
+          await wait(1500 * attempt);
+        }
+      }
+
+      setProgress(1, "Enregistrement…");
+      var ins = await db.from("documents").insert({
+        titre: titre,
+        type: $("type").value,
+        annee: $("annee").value ? Number($("annee").value) : null,
+        etablissement: $("etab").value.trim() || null,
+        chemin_fichier: path,
+        taille_octets: f.size,
+        profil_id: selectedProfileId === "self" ? null : selectedProfileId
+      });
+      if (ins.error) {
+        try { await db.storage.from(BUCKET).remove([path]); } catch (e1) {}
+        throw ins.error;
+      }
+
+      uploadForm.reset();
+      $("annee").value = new Date().getFullYear();
+      zoneInfo.textContent = "";
+      progBox.hidden = true;
+      uploadPanel.hidden = true;
+      $("toggle-add").setAttribute("aria-expanded", "false");
+      if (search.value) { search.value = ""; search.dispatchEvent(new Event("input", { bubbles: true })); }
+      showToast("Document ajouté au coffre.");
+      await loadDocs();
+      var firstDoc = list.firstElementChild;
+      if (firstDoc && firstDoc.classList) {
+        firstDoc.classList.add("fresh");
+        setTimeout(function () { firstDoc.classList.remove("fresh"); }, 4000);
+      }
+      list.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (err) {
+      progBox.hidden = true;
+      var low = String(err && err.message || "").toLowerCase();
+      var text;
+      if (err && err.session || low.indexOf("jwt") > -1 || (err && (err.status === 401 || err.status === 403))) {
+        text = "Votre session a expiré. Reconnectez-vous, puis réessayez.";
+      } else {
+        text = fr(err && err.message);
+      }
+      if (retryable) text += " Votre document est conservé : appuyez sur « Réessayer ».";
+      setNotice(upNotice, text, "error");
+      retryBtn.hidden = false;
+    } finally {
+      running = false;
+      btn.disabled = false;
+      btn.textContent = "Enregistrer dans le coffre";
+    }
+  }
+
+  document.addEventListener("submit", function (e) {
+    if (e.target !== $("upload-form")) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    run();
+  }, true);
+
+  build();
+})();
   async function loadProfiles() {
     var r = await db.from("profils").select("*").order("cree_le", { ascending: true });
     if (r.error) { showToast(fr(r.error.message)); return; }
