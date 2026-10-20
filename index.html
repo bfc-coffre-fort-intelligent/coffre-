@@ -829,6 +829,96 @@ try {
     new MutationObserver(enhance).observe(list, { childList: true });
     enhance();
   })();
+  (function () {
+    var s = document.createElement("style");
+    s.textContent =
+      "#docs{gap:8px}" +
+      "#docs .doc{padding:8px 6px 8px 10px;gap:10px}" +
+      "#docs .doc .d-ico{width:32px;height:32px;font-size:16px;border-radius:8px}" +
+      "#docs .doc .d-txt strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:16px}" +
+      "#docs .doc .d-txt .meta{font-size:13px;margin-top:1px}" +
+      "#docs .doc [data-act=del]{display:none}" +
+      "#docs .doc .d-more{flex:none;min-width:44px;min-height:44px;border:0;background:transparent;font-size:24px;line-height:1;color:var(--muted);cursor:pointer;border-radius:10px}" +
+      "#d-sheet{position:fixed;inset:0;background:rgba(18,55,42,.45);display:flex;align-items:flex-end;justify-content:center;z-index:30}" +
+      "#d-sheet[hidden]{display:none}" +
+      "#d-sheet .box{background:#fff;width:100%;max-width:520px;border-radius:16px 16px 0 0;padding:18px 16px 22px;display:grid;gap:10px}" +
+      "#d-sheet .t{font-weight:700;overflow-wrap:anywhere}" +
+      "#d-undo{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);width:calc(100% - 32px);max-width:480px;box-sizing:border-box;background:var(--pine);color:#fff;padding:8px 8px 8px 16px;border-radius:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;z-index:40}" +
+      "#d-undo[hidden]{display:none}" +
+      "#d-undo button{min-height:44px;padding:0 16px;border-radius:10px;border:1.5px solid #fff;background:transparent;color:#fff;font-weight:700;cursor:pointer}";
+    document.head.appendChild(s);
+
+    var sheet = document.createElement("div");
+    sheet.id = "d-sheet";
+    sheet.hidden = true;
+    sheet.innerHTML = '<div class="box"><div class="t"></div>' +
+      '<button type="button" class="btn danger wide" id="d-sheet-del">Supprimer ce document</button>' +
+      '<button type="button" class="btn ghost wide" id="d-sheet-close">Fermer</button></div>';
+    document.body.appendChild(sheet);
+    var undo = document.createElement("div");
+    undo.id = "d-undo";
+    undo.hidden = true;
+    undo.innerHTML = '<span>Document supprimé.</span><button type="button">Annuler</button>';
+    document.body.appendChild(undo);
+
+    var target = null, pending = null;
+
+    function closeSheet() { sheet.hidden = true; target = null; }
+    function commit() {
+      if (!pending) return;
+      var p = pending; pending = null;
+      clearTimeout(p.timer);
+      undo.hidden = true;
+      var old = window.confirm;
+      window.confirm = function () { return true; };
+      try { deleteDoc(p.d); } finally { window.confirm = old; }
+    }
+    function restore() {
+      if (!pending) return;
+      var p = pending; pending = null;
+      clearTimeout(p.timer);
+      undo.hidden = true;
+      p.li.style.display = "";
+    }
+
+    sheet.addEventListener("click", function (e) { if (e.target === sheet) closeSheet(); });
+    $("d-sheet-close").addEventListener("click", closeSheet);
+    $("d-sheet-del").addEventListener("click", function () {
+      if (!target) return;
+      commit();
+      var t = target; closeSheet();
+      t.li.style.display = "none";
+      pending = { d: t.d, li: t.li, timer: setTimeout(commit, 8000) };
+      undo.hidden = false;
+    });
+    undo.querySelector("button").addEventListener("click", restore);
+
+    function enhance2() {
+      list.querySelectorAll("li.doc[data-c]:not([data-c2])").forEach(function (li) {
+        var del = li.querySelector("[data-act=del]");
+        var meta = li.querySelector(".meta");
+        if (!del || !meta) return;
+        li.setAttribute("data-c2", "1");
+        var d = docs.find(function (x) { return x.id === del.getAttribute("data-id"); });
+        if (!d) return;
+        meta.textContent = [d.annee, fmtSize(d.taille_octets)].filter(Boolean).join(" · ");
+        var more = document.createElement("button");
+        more.type = "button";
+        more.className = "d-more";
+        more.textContent = "⋯";
+        more.setAttribute("aria-label", "Options du document");
+        more.addEventListener("click", function (e) {
+          e.stopPropagation();
+          target = { d: d, li: li };
+          sheet.querySelector(".t").textContent = d.titre;
+          sheet.hidden = false;
+        });
+        li.appendChild(more);
+      });
+    }
+    new MutationObserver(enhance2).observe(list, { childList: true });
+    enhance2();
+  })();
   async function loadProfiles() {
     var r = await db.from("profils").select("*").order("cree_le", { ascending: true });
     if (r.error) { showToast(fr(r.error.message)); return; }
