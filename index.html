@@ -1161,6 +1161,28 @@ try {
       setTimeout(function () { apply(event, session && session.user); }, 50);
     });
   })();
+  (function () {
+    var s = document.createElement("style");
+    s.textContent =
+      "#ia-switch{align-items:flex-start;margin:14px 0 6px}" +
+      "#ia-switch>span{font-weight:600}" +
+      "#ia-switch small{display:block;margin-top:2px;font-weight:400;font-size:13px;color:var(--muted);line-height:1.35}";
+    document.head.appendChild(s);
+
+    function maj() {
+      var sw = document.getElementById("ia-sw");
+      var t = document.getElementById("titre");
+      if (!sw || !t) return;
+      t.placeholder = sw.checked
+        ? "Laissez vide : proposé par l'IA"
+        : "Laissez vide : « Document du » + la date";
+    }
+    var sw = document.getElementById("ia-sw");
+    if (sw) sw.addEventListener("change", function () { setTimeout(maj, 100); });
+    var tg = document.getElementById("toggle-add");
+    if (tg) tg.addEventListener("click", function () { setTimeout(maj, 150); });
+    maj();
+  })();
   async function loadProfiles() {
     var r = await db.from("profils").select("*").order("cree_le", { ascending: true });
     if (r.error) { showToast(fr(r.error.message)); return; }
