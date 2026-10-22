@@ -919,6 +919,248 @@ try {
     new MutationObserver(enhance2).observe(list, { childList: true });
     enhance2();
   })();
+  (function () {
+    var MAX_PROFILS = 3;
+    var s = document.createElement("style");
+    s.textContent =
+      ".legal-links{margin:28px 0 8px;padding-top:16px;border-top:1px solid var(--line);display:grid;gap:4px;font-size:14px;color:var(--muted)}" +
+      ".legal-links a,.legal-links button.lnk{color:var(--pine);background:none;border:0;padding:0;min-height:36px;text-align:left;font:inherit;text-decoration:underline;cursor:pointer}" +
+      "#close-sheet{position:fixed;inset:0;background:rgba(18,55,42,.45);display:flex;align-items:flex-end;justify-content:center;z-index:50}" +
+      "#close-sheet[hidden]{display:none}" +
+      "#close-sheet .box{background:#fff;width:100%;max-width:520px;border-radius:16px 16px 0 0;padding:18px 16px 22px;display:grid;gap:10px}" +
+      "#close-sheet .t{font-weight:700;font-size:18px}" +
+      "#close-sheet p{margin:0}";
+    document.head.appendChild(s);
+
+    // 1) Limite de profils
+    function limitProfiles() {
+      var add = document.getElementById("add-profile");
+      if (add && profiles.length >= MAX_PROFILS) add.remove();
+    }
+    new MutationObserver(limitProfiles).observe(profilesBar, { childList: true });
+    limitProfiles();
+
+    // 2) Liens + demande de fermeture
+    var appLinks = document.createElement("div");
+    appLinks.className = "legal-links";
+    appLinks.innerHTML =
+      '<a href="conditions.html" target="_blank" rel="noopener">Conditions d\'utilisation</a>' +
+      '<a href="confidentialite.html" target="_blank" rel="noopener">Politique de confidentialité</a>' +
+      '<button type="button" class="lnk" id="close-open">Demander la fermeture de mon compte</button>';
+    $("app-view").appendChild(appLinks);
+
+    var authLinks = document.createElement("div");
+    authLinks.className = "legal-links";
+    authLinks.innerHTML =
+      '<a href="conditions.html" target="_blank" rel="noopener">Conditions d\'utilisation</a>' +
+      '<a href="confidentialite.html" target="_blank" rel="noopener">Politique de confidentialité</a>';
+    $("auth-view").appendChild(authLinks);
+
+    var sheet = document.createElement("div");
+    sheet.id = "close-sheet";
+    sheet.hidden = true;
+    sheet.innerHTML =
+      '<div class="box"><div class="t">Fermer mon compte ?</div>' +
+      '<p>Votre demande sera enregistrée avec sa date. Nous vous écrirons pour vérifier que c\'est bien vous. Vous aurez ensuite 48 heures pour changer d\'avis, puis votre compte et vos documents seront supprimés sous 2 semaines.</p>' +
+      '<p><strong>La suppression est définitive.</strong> Téléchargez vos documents importants avant.</p>' +
+      '<p id="close-msg" class="notice" role="alert" hidden></p>' +
+      '<button type="button" class="btn danger wide" id="close-send">Envoyer la demande</button>' +
+      '<button type="button" class="btn ghost wide" id="close-cancel">Annuler</button></div>';
+    document.body.appendChild(sheet);
+
+    var busy = false;
+    function hide() { sheet.hidden = true; }
+    $("close-open").addEventListener("click", function () {
+      $("close-msg").hidden = true;
+      $("close-send").hidden = false;
+      $("close-cancel").textContent = "Annuler";
+      sheet.hidden = false;
+    });
+    $("close-cancel").addEventListener("click", hide);
+    sheet.addEventListener("click", function (e) { if (e.target === sheet) hide(); });
+    $("close-send").addEventListener("click", async function () {
+      if (busy) return;
+      busy = true;
+      var btn = $("close-send");
+      btn.disabled = true;
+      var msg = $("close-msg");
+      var r = await db.from("demandes_fermeture").insert({});
+      btn.disabled = false;
+      busy = false;
+      msg.hidden = false;
+      if (r.error) {
+        var m = String(r.error.message || "").toLowerCase();
+        if (r.error.code === "23505" || m.indexOf("duplicate") > -1) {
+          msg.className = "notice ok";
+          msg.textContent = "Une demande de fermeture est déjà en cours pour votre compte. Nous vous écrirons.";
+          btn.hidden = true;
+        } else {
+          msg.className = "notice error";
+          msg.textContent = "Demande impossible pour le moment : " + fr(r.error.message) + " Vous pouvez aussi écrire à contact@coffre-bfc.com.";
+        }
+        return;
+      }
+      msg.className = "notice ok";
+      msg.textContent = "Demande enregistrée le " + new Date().toLocaleDateString("fr-FR") + ". Nous vous écrivons à l'adresse de votre compte pour la confirmer.";
+      btn.hidden = true;
+      $("close-cancel").textContent = "Fermer";
+    });
+  })();
+
+  (function () {
+    var VERSION = "2026-10-21";
+    var iaOn = false, cguOk = false, curUser = null, gateOpen = false;
+
+    var st = document.createElement("style");
+    st.textContent =
+      ".chk{display:flex;gap:10px;align-items:flex-start;margin:12px 0 0;font-weight:400;line-height:1.4}" +
+      ".chk input{width:auto;min-height:0;margin:3px 0 0;flex:none;transform:scale(1.25)}" +
+      "#signup-consents{margin-top:6px}" +
+      "#signup-consents small{display:block;color:var(--muted);margin-top:2px}" +
+      "#ia-switch{margin:6px 0 10px}" +
+      "#consent-gate{position:fixed;inset:0;background:var(--paper);z-index:70;overflow:auto;padding:20px 16px}" +
+      "#consent-gate[hidden]{display:none}" +
+      "#consent-gate .in{max-width:560px;margin:0 auto}";
+    document.head.appendChild(st);
+
+    var LINKS = '<a href="conditions.html" target="_blank" rel="noopener">conditions d\'utilisation</a> et la ' +
+      '<a href="confidentialite.html" target="_blank" rel="noopener">politique de confidentialité</a>';
+    var IA_TXT = 'Oui, proposer automatiquement un titre pour mes documents.' +
+      '<small>Une copie du document est envoyée à une intelligence artificielle (Anthropic), uniquement pour cela. Vous pouvez changer d\'avis à tout moment.</small>';
+
+    // 1) Cases à cocher à l'inscription
+    var box = document.createElement("div");
+    box.id = "signup-consents";
+    box.hidden = true;
+    box.innerHTML =
+      '<label class="chk"><input type="checkbox" id="cgu-chk"><span>J\'accepte les ' + LINKS + '. <em>(obligatoire)</em></span></label>' +
+      '<label class="chk"><input type="checkbox" id="ia-chk"><span>' + IA_TXT + ' <em>(facultatif)</em></span></label>';
+    authForm.insertBefore(box, $("auth-submit"));
+    function syncBox() { box.hidden = mode !== "signup"; }
+    $("tab-login").addEventListener("click", syncBox);
+    $("tab-signup").addEventListener("click", syncBox);
+
+    authForm.addEventListener("submit", function (e) {
+      if (mode !== "signup") return;
+      if (!$("cgu-chk").checked) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        setNotice(authNotice, "Pour créer un compte, cochez la case d'acceptation des conditions et de la politique de confidentialité.", "error");
+      }
+    }, true);
+
+    var origSignUp = db.auth.signUp.bind(db.auth);
+    db.auth.signUp = function (args) {
+      var now = new Date().toISOString();
+      args = args || {};
+      args.options = args.options || {};
+      args.options.data = Object.assign({}, args.options.data, {
+        cgu_accepte_le: now,
+        ia_consent: $("ia-chk").checked,
+        ia_consent_le: now,
+        version_textes: VERSION
+      });
+      return origSignUp(args);
+    };
+
+    // 2) L'envoi à l'IA n'a lieu que si la famille a accepté
+    var origInvoke = db.functions.invoke.bind(db.functions);
+    db.functions.invoke = function (name, opts) {
+      if (name === "classer-document" && !iaOn) {
+        return Promise.resolve({ data: null, error: { message: "ia_desactivee" } });
+      }
+      return origInvoke(name, opts);
+    };
+
+    // 3) Interrupteur sur l'écran d'ajout
+    var sw = document.createElement("label");
+    sw.className = "chk";
+    sw.id = "ia-switch";
+    sw.innerHTML = '<input type="checkbox" id="ia-sw"><span>Titre automatique par IA <small>Une copie de la photo est envoyée à une IA pour proposer le titre.</small></span>';
+    var tl = uploadForm.querySelector('label[for="titre"]');
+    if (tl) tl.parentNode.insertBefore(sw, tl); else uploadForm.insertBefore(sw, uploadForm.firstChild);
+    $("ia-sw").addEventListener("change", function () {
+      saveConsent(null, this.checked, "interrupteur");
+    });
+
+    function reflect() { $("ia-sw").checked = iaOn; }
+
+    // 4) Enregistrer / retrouver les consentements
+    async function history(rows) {
+      try { await db.from("consentements").insert(rows); } catch (e) {}
+    }
+    async function saveConsent(cgu, ia, source) {
+      var now = new Date().toISOString();
+      var data = { ia_consent: ia, ia_consent_le: now, version_textes: VERSION };
+      var rows = [{ type: "ia", accepte: ia, source: source, version_textes: VERSION, cree_le: now }];
+      if (cgu) {
+        data.cgu_accepte_le = now;
+        rows.push({ type: "conditions", accepte: true, source: source, version_textes: VERSION, cree_le: now });
+      }
+      var r = await db.auth.updateUser({ data: data });
+      if (r && r.error) {
+        showToast("Enregistrement impossible : " + fr(r.error.message));
+        reflect();
+        return false;
+      }
+      iaOn = ia;
+      if (cgu) cguOk = true;
+      reflect();
+      history(rows);
+      return true;
+    }
+
+    async function syncHistory(user) {
+      var md = user.user_metadata || {};
+      if (!md.cgu_accepte_le) return;
+      var r = await db.from("consentements").select("id");
+      if (r.error || (r.data && r.data.length)) return;
+      history([
+        { type: "conditions", accepte: true, source: "inscription", version_textes: md.version_textes || VERSION, cree_le: md.cgu_accepte_le },
+        { type: "ia", accepte: md.ia_consent === true, source: "inscription", version_textes: md.version_textes || VERSION, cree_le: md.ia_consent_le || md.cgu_accepte_le }
+      ]);
+    }
+
+    // 5) Écran de consentement pour les comptes qui n'ont pas encore accepté
+    var gate = document.createElement("div");
+    gate.id = "consent-gate";
+    gate.hidden = true;
+    gate.innerHTML =
+      '<div class="in"><h1>Avant de continuer</h1>' +
+      '<p class="hint">Pour utiliser le Coffre, merci de lire et d\'accepter nos règles.</p>' +
+      '<div class="panel" style="margin-top:16px">' +
+      '<label class="chk" style="margin-top:0"><input type="checkbox" id="g-cgu"><span>J\'accepte les ' + LINKS + '. <em>(obligatoire)</em></span></label>' +
+      '<label class="chk"><input type="checkbox" id="g-ia"><span>' + IA_TXT + ' <em>(facultatif)</em></span></label>' +
+      '<button id="g-ok" class="btn wide" type="button" disabled>Continuer</button>' +
+      '<button id="g-out" class="btn ghost wide" type="button">Se déconnecter</button>' +
+      '<p id="g-msg" class="notice" role="alert" hidden></p></div></div>';
+    document.body.appendChild(gate);
+    $("g-cgu").addEventListener("change", function () { $("g-ok").disabled = !this.checked; });
+    $("g-out").addEventListener("click", function () { gate.hidden = true; gateOpen = false; db.auth.signOut(); });
+    $("g-ok").addEventListener("click", async function () {
+      var ok = await saveConsent(true, $("g-ia").checked, "ecran-consentement");
+      if (ok) { gate.hidden = true; gateOpen = false; }
+      else setNotice($("g-msg"), "Enregistrement impossible. Réessayez.", "error");
+    });
+
+    function apply(event, user) {
+      curUser = user || null;
+      var md = (user && user.user_metadata) || {};
+      iaOn = md.ia_consent === true;
+      cguOk = !!md.cgu_accepte_le;
+      reflect();
+      if (!user) { gate.hidden = true; gateOpen = false; return; }
+      if (event === "PASSWORD_RECOVERY") return;
+      if (!cguOk) {
+        if (!gateOpen) { $("g-cgu").checked = false; $("g-ia").checked = false; $("g-ok").disabled = true; gate.hidden = false; gateOpen = true; }
+      } else {
+        syncHistory(user);
+      }
+    }
+    db.auth.onAuthStateChange(function (event, session) {
+      setTimeout(function () { apply(event, session && session.user); }, 50);
+    });
+  })();
   async function loadProfiles() {
     var r = await db.from("profils").select("*").order("cree_le", { ascending: true });
     if (r.error) { showToast(fr(r.error.message)); return; }
