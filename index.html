@@ -1183,6 +1183,81 @@ try {
     if (tg) tg.addEventListener("click", function () { setTimeout(maj, 150); });
     maj();
   })();
+  (function () {
+    var links = document.querySelector("#app-view .legal-links");
+    if (!links) return;
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "lnk";
+    btn.id = "export-open";
+    btn.textContent = "Télécharger mes données";
+    links.insertBefore(btn, $("close-open"));
+
+    function esc(v) {
+      return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    }
+    function day(v) { return v ? new Date(v).toLocaleDateString("fr-FR") : ""; }
+
+    btn.addEventListener("click", async function () {
+      if (btn.disabled) return;
+      btn.disabled = true;
+      var old = btn.textContent;
+      btn.textContent = "Préparation…";
+      try {
+        var us = await db.auth.getUser();
+        var user = (us.data && us.data.user) || {};
+        var rp = await db.from("profils").select("*").order("cree_le", { ascending: true });
+        var rd = await db.from("documents").select("*").order("cree_le", { ascending: false });
+        var rc = await db.from("consentements").select("*").order("cree_le", { ascending: true });
+        var rf = await db.from("demandes_fermeture").select("*");
+        if (rp.error || rd.error) throw new Error((rp.error || rd.error).message);
+        var profs = rp.data || [], docs = rd.data || [];
+        var names = {};
+        profs.forEach(function (p) { names[p.id] = p.nom; });
+
+        var urls = {};
+        if (docs.length) {
+          var su = await db.storage.from(BUCKET).createSignedUrls(docs.map(function (d) { return d.chemin_fichier; }), 604800);
+          (su.data || []).forEach(function (x) { if (x && x.path && x.signedUrl) urls[x.path] = x.signedUrl; });
+        }
+
+        var h = '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mes données – Coffre BFC</title>' +
+          '<style>body{font:16px/1.5 system-ui,sans-serif;max-width:720px;margin:0 auto;padding:16px;color:#12372A}h1{font-size:24px}h2{margin-top:28px;font-size:18px;border-bottom:1px solid #D5DDD8}li{margin:8px 0}small{color:#5b6b63}</style></head><body>' +
+          '<h1>Mes données – Coffre BFC</h1><p><small>Fichier créé le ' + day(new Date()) + '.</small></p>' +
+          '<h2>Mon compte</h2><p>Adresse e-mail : ' + esc(user.email) + '<br>Compte créé le : ' + day(user.created_at) + '</p>' +
+          '<h2>Profils</h2><ul><li>Moi-même</li>' + profs.map(function (p) { return "<li>" + esc(p.nom) + "</li>"; }).join("") + "</ul>" +
+          '<h2>Documents (' + docs.length + ')</h2><p><small>Les liens de téléchargement sont valables 7 jours. Passé ce délai, refaites « Télécharger mes données ».</small></p><ul>' +
+          docs.map(function (d) {
+            var who = d.profil_id ? (names[d.profil_id] || "Profil") : "Moi-même";
+            var meta = [who, d.type, d.annee, d.etablissement, "ajouté le " + day(d.cree_le)].filter(Boolean).map(esc).join(" · ");
+            var u = urls[d.chemin_fichier];
+            return "<li><strong>" + esc(d.titre) + "</strong><br><small>" + meta + "</small>" +
+              (u ? '<br><a href="' + esc(u) + '">Télécharger le fichier</a>' : "") + "</li>";
+          }).join("") + "</ul>" +
+          '<h2>Mes accords</h2><ul>' + ((rc.data || []).map(function (c) {
+            return "<li>" + (c.type === "ia" ? "Aide de l'IA" : "Conditions et confidentialité") + " : " + (c.accepte ? "accepté" : "refusé") + " le " + day(c.cree_le) + " <small>(" + esc(c.source) + ")</small></li>";
+          }).join("") || "<li>Aucun enregistrement.</li>") + "</ul>" +
+          '<h2>Demandes de fermeture</h2><ul>' + ((rf.data || []).map(function (f) {
+            return "<li>Demande du " + day(f.demande_le) + " – " + esc(f.statut) + "</li>";
+          }).join("") || "<li>Aucune.</li>") + "</ul></body></html>";
+
+        var blob = new Blob([h], { type: "text/html;charset=utf-8" });
+        var a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "coffre-bfc-mes-donnees-" + new Date().toISOString().slice(0, 10) + ".html";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+        showToast("Fichier « Mes données » téléchargé.");
+      } catch (e) {
+        showToast("Téléchargement impossible : " + fr(e.message || "réessayez"));
+      }
+      btn.disabled = false;
+      btn.textContent = old;
+    });
+  })();
   async function loadProfiles() {
     var r = await db.from("profils").select("*").order("cree_le", { ascending: true });
     if (r.error) { showToast(fr(r.error.message)); return; }
