@@ -1,1 +1,16 @@
-
+{
+  "name": "BFC Safe Family",
+  "short_name": "BFC Safe",
+  "description": "Votre coffre numérique : vos documents importants, protégés aujourd'hui, accessibles demain.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#12372A",
+  "theme_color": "#12372A",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
