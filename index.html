@@ -671,11 +671,20 @@ try {
     });
   }
 
+  var UNREADABLE = "Ce fichier ne peut pas être lu par le navigateur (cela arrive avec les fichiers pris directement dans WhatsApp). Enregistrez-le d'abord dans la galerie du téléphone, puis ajoutez-le depuis la galerie.";
+  async function canRead(file) {
+    try {
+      if (file.slice && file.slice(0, 1).arrayBuffer) { await file.slice(0, 1).arrayBuffer(); }
+      return true;
+    } catch (e) { return false; }
+  }
+
   async function run() {
     if (running) return;
     var f = input.files && input.files[0];
     if (!f) { setNotice(upNotice, "Choisissez d'abord une photo ou un fichier.", "error"); return; }
     if (f.size > MAX_BYTES) { setNotice(upNotice, "Ce fichier dépasse 50 Mo. Choisissez un fichier plus léger.", "error"); return; }
+    if (!(await canRead(f))) { setNotice(upNotice, UNREADABLE, "error"); retryBtn.hidden = true; return; }
 
     var titre = $("titre").value.trim();
     if (!titre) { titre = guessTitle(f.name); $("titre").value = titre; }
@@ -754,9 +763,11 @@ try {
       } else {
         text = fr(err && err.message);
       }
-      if (retryable) text += " Votre document est conservé : appuyez sur « Réessayer ».";
+      var unreadable = false;
+      if (err && err.network && !(await canRead(f))) { unreadable = true; text = UNREADABLE; }
+      if (retryable && !unreadable) text += " Votre document est conservé : appuyez sur « Réessayer ».";
       setNotice(upNotice, text, "error");
-      retryBtn.hidden = false;
+      retryBtn.hidden = unreadable;
     } finally {
       running = false;
       btn.disabled = false;
