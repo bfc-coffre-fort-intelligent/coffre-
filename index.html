@@ -194,6 +194,7 @@ input[type=file]{height:auto;padding:10px 12px}
 <div id="toast" class="toast" role="status" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/tus-js-client@4.1.0/dist/tus.min.js"></script>
 <script>
 (function () {
   "use strict";
@@ -671,6 +672,41 @@ try {
     });
   }
 
+  var TUS_MIN = 6 * 1024 * 1024;
+  var TUS_ENDPOINT = "https://zccvohfllkutrisygadf.storage.supabase.co/storage/v1/upload/resumable";
+  function tusUpload(path, file, token) {
+    return new Promise(function (resolve, reject) {
+      var up = new window.tus.Upload(file, {
+        endpoint: TUS_ENDPOINT,
+        retryDelays: [0, 2000, 5000, 10000, 20000, 30000],
+        headers: { authorization: "Bearer " + token, "x-upsert": "false" },
+        uploadDataDuringCreation: true,
+        removeFingerprintOnSuccess: true,
+        chunkSize: 6 * 1024 * 1024,
+        metadata: {
+          bucketName: BUCKET,
+          objectName: path,
+          contentType: file.type || "application/octet-stream",
+          cacheControl: "3600"
+        },
+        onError: function (e) {
+          var err = new Error(String(e && e.message || "network"));
+          err.network = true;
+          reject(err);
+        },
+        onProgress: function (done, total) {
+          var r = total ? done / total : 0;
+          setProgress(r, "Envoi en cours : " + Math.round(r * 100) + " %");
+        },
+        onSuccess: function () { resolve(); }
+      });
+      up.findPreviousUploads().then(function (prev) {
+        if (prev && prev.length) { up.resumeFromPreviousUpload(prev[0]); }
+        up.start();
+      }).catch(function () { up.start(); });
+    });
+  }
+
   var UNREADABLE = "Ce fichier ne peut pas être lu par le navigateur (cela arrive avec les fichiers pris directement dans WhatsApp). Enregistrez-le d'abord dans la galerie du téléphone, puis ajoutez-le depuis la galerie.";
   async function canRead(file) {
     try {
@@ -704,10 +740,14 @@ try {
       if (!token) { var e0 = new Error("session"); e0.session = true; throw e0; }
 
       var path = "", ok = false;
+      var useTus = !!(window.tus && window.tus.Upload) && f.size > TUS_MIN;
+      if (useTus) { path = currentUser.id + "/" + uid() + "-" + safeName(f.name); }
       for (var attempt = 1; attempt <= 3 && !ok; attempt++) {
-        path = currentUser.id + "/" + uid() + "-" + safeName(f.name);
+        if (!useTus) { path = currentUser.id + "/" + uid() + "-" + safeName(f.name); }
         try {
-          if (attempt === 1) {
+          if (useTus) {
+            await tusUpload(path, f, token);
+          } else if (attempt === 1) {
             await xhrUpload(path, f, token);
           } else {
             var up = await db.storage.from(BUCKET).upload(path, f, { contentType: f.type || "application/octet-stream" });
