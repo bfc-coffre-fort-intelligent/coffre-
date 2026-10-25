@@ -464,7 +464,10 @@ try {
   }, true);
 })();
   (function () {
-  var LIMIT = 3 * 1024 * 1024 * 1024;
+  var GO = 1024 * 1024 * 1024;
+  var extraGo = 0;
+  function limitBytes() { return (3 + extraGo) * GO; }
+  function limitLabel() { return (3 + extraGo) + " Go"; }
   var used = 0, box = null, timer = null;
   function fmt(n) {
     if (n >= 1073741824) return (n / 1073741824).toFixed(2).replace(".", ",") + " Go";
@@ -564,10 +567,10 @@ try {
   }
   function render() {
     if (!build()) return;
-    var pct = Math.min(100, used / LIMIT * 100);
+    var pct = Math.min(100, used / limitBytes() * 100);
     var bar = box.querySelector("#quota-bar");
     var color = pct >= 95 ? "#B3261E" : pct >= 80 ? "#C48A2C" : "#14352A";
-    box.querySelector("#quota-text").textContent = "Espace utilisé : " + fmt(used) + " sur 3 Go";
+    box.querySelector("#quota-text").textContent = "Espace utilisé : " + fmt(used) + " sur " + limitLabel();
     bar.style.width = pct.toFixed(1) + "%";
     bar.style.background = color;
     var w = box.querySelector("#quota-warn");
@@ -580,6 +583,10 @@ try {
   }
   async function refresh() {
     try {
+      try {
+        var ab = await db.from("abonnements").select("espace_extra_go");
+        if (ab && !ab.error && ab.data && ab.data.length) { extraGo = Math.max(0, Number(ab.data[0].espace_extra_go) || 0); }
+      } catch (e2) {}
       var r = await db.from("documents").select("taille_octets");
       if (r.error || !r.data) return;
       used = 0;
@@ -599,10 +606,10 @@ try {
     if (!input || input.type !== "file" || !input.files || !input.files.length) return;
     var add = 0;
     Array.prototype.forEach.call(input.files, function (f) { add += f.size; });
-    if (used + add > LIMIT) {
+    if (used + add > limitBytes()) {
       e.stopImmediatePropagation();
       input.value = "";
-      showToast("Espace insuffisant : votre coffre est limité à 3 Go.");
+      showToast("Espace insuffisant : votre coffre est limité à " + limitLabel() + ".");
     }
   }, true);
 })();
