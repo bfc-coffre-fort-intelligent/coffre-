@@ -480,10 +480,87 @@ try {
     box.style.cssText = "margin:12px 0";
     box.innerHTML = '<div id="quota-text" style="font-size:14px;margin-bottom:6px"></div><div style="height:8px;border-radius:4px;background:#DDE3DC;overflow:hidden"><div id="quota-bar" style="height:100%;width:0;background:#14352A"></div></div><p id="quota-warn" style="font-size:13px;margin:6px 0 0;color:#8A5A00" hidden></p><button id="quota-more" type="button" class="btn ghost small" style="margin-top:8px">Augmenter mon espace</button>';
     anchor.parentNode.insertBefore(box, anchor.nextSibling);
-    box.querySelector("#quota-more").addEventListener("click", function () {
-      showToast("L'achat d'espace supplémentaire sera bientôt disponible.");
-    });
+    box.querySelector("#quota-more").addEventListener("click", function () { openPay(); });
     return true;
+  }
+  var MTN_NUMBER = "671732552", MTN_SHOWN = "6 71 73 25 52";
+  var OM_NUMBER = "696166593", OM_SHOWN = "6 96 16 65 93";
+  var WA_NUMBER = MTN_NUMBER;
+  var paySheet = null;
+  function payAmount(extra) { return extra > 0 ? 2700 + 300 * extra : 3000; }
+  function fmtF(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " FCFA"; }
+  function openPay() {
+    if (!paySheet) {
+      var st = document.createElement("style");
+      st.textContent =
+        "#pay-sheet{position:fixed;inset:0;background:rgba(18,55,42,.45);display:flex;align-items:flex-end;justify-content:center;z-index:50}" +
+        "#pay-sheet[hidden]{display:none}" +
+        "#pay-sheet .box{background:#fff;width:100%;max-width:520px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:18px 16px 22px;display:grid;gap:12px;box-sizing:border-box}" +
+        "#pay-sheet h2{margin:0;font-size:20px}" +
+        "#pay-sheet label{font-weight:600;font-size:14px}" +
+        "#pay-sheet select{width:100%;min-height:48px;border:1.5px solid var(--line);border-radius:10px;padding:0 10px;font:inherit;background:#fff;margin-top:4px}" +
+        "#pay-sheet .sum{background:var(--pine-soft);border-radius:12px;padding:12px 14px}" +
+        "#pay-sheet .sum b{font-size:22px}" +
+        "#pay-sheet ol{margin:0;padding-left:20px;display:grid;gap:6px;font-size:15px}" +
+        "#pay-sheet .num{font-size:20px;font-weight:700;letter-spacing:.5px}" +
+        "#pay-sheet .row{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px}" +
+        "#pay-sheet .row .btn{min-height:40px;padding:0 12px;flex:none}" +
+        "#pay-sheet small{color:var(--muted)}";
+      document.head.appendChild(st);
+      paySheet = document.createElement("div");
+      paySheet.id = "pay-sheet";
+      paySheet.hidden = true;
+      paySheet.innerHTML =
+        '<div class="box" role="dialog" aria-modal="true" aria-labelledby="pay-title">' +
+        '<h2 id="pay-title">Payer mon abonnement</h2>' +
+        '<div><label for="pay-extra">Espace en plus</label>' +
+        '<select id="pay-extra">' +
+        '<option value="0">Aucun : compte de base (3 Go)</option>' +
+        '<option value="5">+ 5 Go (8 Go au total)</option>' +
+        '<option value="10">+ 10 Go (13 Go au total)</option>' +
+        '<option value="20">+ 20 Go (23 Go au total)</option>' +
+        '<option value="50">+ 50 Go (53 Go au total)</option></select></div>' +
+        '<div class="sum"><div>À payer par trimestre</div><b id="pay-total"></b><div><small id="pay-detail"></small></div></div>' +
+        '<div>1. Envoyez ce montant à l\'un de ces deux numéros :</div>' +
+        '<div class="row"><div><div><small>MTN Mobile Money</small></div><div class="num">' + MTN_SHOWN + '</div></div><button type="button" class="btn ghost" id="pay-copy-mtn">Copier</button></div>' +
+        '<div class="row"><div><div><small>Orange Money</small></div><div class="num">' + OM_SHOWN + '</div></div><button type="button" class="btn ghost" id="pay-copy-om">Copier</button></div>' +
+        '<ol start="2"><li>Appuyez sur « J\'ai payé » : WhatsApp s\'ouvre avec votre message déjà écrit.</li>' +
+        '<li>Votre espace est activé dès que nous avons vérifié le paiement.</li></ol>' +
+        '<button type="button" class="btn wide" id="pay-done">J\'ai payé</button>' +
+        '<button type="button" class="btn ghost wide" id="pay-close">Fermer</button>' +
+        '</div>';
+      document.body.appendChild(paySheet);
+      var sel = paySheet.querySelector("#pay-extra");
+      var upd = function () {
+        var x = Number(sel.value) || 0;
+        paySheet.querySelector("#pay-total").textContent = fmtF(payAmount(x));
+        paySheet.querySelector("#pay-detail").textContent = x > 0
+          ? "Compte de base 2 700 FCFA (−10 %) + " + x + " Go × 300 FCFA"
+          : "Compte de base : 3 Go";
+      };
+      sel.addEventListener("change", upd);
+      upd();
+      paySheet.addEventListener("click", function (e) { if (e.target === paySheet) paySheet.hidden = true; });
+      paySheet.querySelector("#pay-close").addEventListener("click", function () { paySheet.hidden = true; });
+      var copyNum = function (num, shown) {
+        var fallback = function () { showToast("Numéro : " + shown); };
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(num).then(function () { showToast("Numéro copié : " + shown); }, fallback);
+          } else { fallback(); }
+        } catch (e) { fallback(); }
+      };
+      paySheet.querySelector("#pay-copy-mtn").addEventListener("click", function () { copyNum(MTN_NUMBER, MTN_SHOWN); });
+      paySheet.querySelector("#pay-copy-om").addEventListener("click", function () { copyNum(OM_NUMBER, OM_SHOWN); });
+      paySheet.querySelector("#pay-done").addEventListener("click", function () {
+        var x = Number(sel.value) || 0;
+        var mail = (currentUser && currentUser.email) || "";
+        var txt = "Bonjour, j'ai payé " + fmtF(payAmount(x)) + " pour mon compte BFC Safe Family" +
+          (x > 0 ? " (+ " + x + " Go)" : "") + ". Mon adresse e-mail : " + mail;
+        window.open("https://wa.me/237" + WA_NUMBER + "?text=" + encodeURIComponent(txt), "_blank", "noopener");
+      });
+    }
+    paySheet.hidden = false;
   }
   function render() {
     if (!build()) return;
@@ -1000,6 +1077,7 @@ try {
     appLinks.innerHTML =
       '<a href="conditions.html" target="_blank" rel="noopener">Conditions d\'utilisation</a>' +
       '<a href="confidentialite.html" target="_blank" rel="noopener">Politique de confidentialité</a>' +
+      '<a href="https://wa.me/237671732552" target="_blank" rel="noopener">Nous contacter sur WhatsApp : 6 71 73 25 52</a>' +
       '<button type="button" class="lnk" id="close-open">Demander la fermeture de mon compte</button>';
     $("app-view").appendChild(appLinks);
 
@@ -1007,7 +1085,8 @@ try {
     authLinks.className = "legal-links";
     authLinks.innerHTML =
       '<a href="conditions.html" target="_blank" rel="noopener">Conditions d\'utilisation</a>' +
-      '<a href="confidentialite.html" target="_blank" rel="noopener">Politique de confidentialité</a>';
+      '<a href="confidentialite.html" target="_blank" rel="noopener">Politique de confidentialité</a>' +
+      '<a href="https://wa.me/237671732552" target="_blank" rel="noopener">Nous contacter sur WhatsApp : 6 71 73 25 52</a>';
     $("auth-view").appendChild(authLinks);
 
     var sheet = document.createElement("div");
