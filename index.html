@@ -614,6 +614,158 @@ try {
   }, true);
 })();
   (function () {
+  // Bouton « Administration » : visible seulement pour un compte administrateur (contrôlé par la base).
+  var ST = { essai: "Essai", actif: "Actif", grace: "Délai de grâce", lecture_seule: "Lecture seule", ferme: "Fermé" };
+  var sheet = null, clients = [], current = null, isAdmin = false, checking = false;
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function amountFor(x) { return x > 0 ? 2700 + 300 * x : 3000; }
+  function fmtF(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " FCFA"; }
+  function fmtDate(s) { if (!s) return "—"; var p = String(s).split("-"); return p.length === 3 ? p[2] + "/" + p[1] + "/" + p[0] : s; }
+  function daysLeft(s) {
+    if (!s) return null;
+    var t = new Date(s + "T00:00:00"), n = new Date(); n.setHours(0, 0, 0, 0);
+    return Math.round((t - n) / 86400000);
+  }
+  function addStyle() {
+    var st = document.createElement("style");
+    st.textContent =
+      "#adm-sheet{position:fixed;inset:0;background:var(--paper,#F3F5F2);z-index:60;overflow:auto;padding:16px}" +
+      "#adm-sheet[hidden]{display:none}" +
+      "#adm-sheet .in{max-width:560px;margin:0 auto;display:grid;gap:12px}" +
+      "#adm-sheet h2{margin:0;font-size:22px}" +
+      "#adm-sheet .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}" +
+      "#adm-sheet .stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center}" +
+      "#adm-sheet .stat b{display:block;font-size:20px}" +
+      "#adm-sheet .stat span{font-size:12px;color:var(--muted)}" +
+      "#adm-sheet ul{list-style:none;margin:0;padding:0;display:grid;gap:8px}" +
+      "#adm-sheet li button.cl{width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font:inherit;color:inherit;cursor:pointer;display:grid;gap:2px}" +
+      "#adm-sheet .em{font-weight:600;overflow-wrap:anywhere}" +
+      "#adm-sheet .sub{font-size:14px;color:var(--muted)}" +
+      "#adm-sheet .late{color:#B3261E;font-weight:600}" +
+      "#adm-sheet .soon{color:#8A5A00;font-weight:600}" +
+      "#adm-sheet select,#adm-sheet input{width:100%;min-height:48px;border:1.5px solid var(--line);border-radius:10px;padding:0 10px;font:inherit;background:#fff;margin-top:4px;box-sizing:border-box}" +
+      "#adm-sheet label{font-weight:600;font-size:14px}" +
+      "#adm-sheet .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:10px}";
+    document.head.appendChild(st);
+  }
+  function ensureSheet() {
+    if (sheet) return;
+    addStyle();
+    sheet = document.createElement("div");
+    sheet.id = "adm-sheet";
+    sheet.hidden = true;
+    document.body.appendChild(sheet);
+  }
+  async function load() {
+    var r = await db.rpc("admin_lister_clients");
+    if (r.error) { showToast("Accès refusé ou erreur."); return false; }
+    clients = r.data || [];
+    return true;
+  }
+  function renderList(filter) {
+    var f = (filter || "").trim().toLowerCase();
+    var n = { essai: 0, actif: 0, retard: 0 };
+    clients.forEach(function (c) {
+      if (c.statut === "essai") n.essai++;
+      else if (c.statut === "actif") n.actif++;
+      else if (c.statut === "grace" || c.statut === "lecture_seule") n.retard++;
+    });
+    var rows = clients.filter(function (c) { return !f || String(c.email || "").toLowerCase().indexOf(f) >= 0; });
+    sheet.innerHTML =
+      '<div class="in"><h2>Administration</h2>' +
+      '<div class="stats"><div class="stat"><b>' + clients.length + '</b><span>comptes</span></div>' +
+      '<div class="stat"><b>' + n.actif + '</b><span>actifs</span></div>' +
+      '<div class="stat"><b>' + n.retard + '</b><span>en retard</span></div></div>' +
+      '<input id="adm-q" type="search" placeholder="Chercher un e-mail" value="' + esc(filter || "") + '">' +
+      '<ul>' + (rows.length ? rows.map(function (c, i) {
+        var d = daysLeft(c.echeance), note = "";
+        if (d !== null) note = d < 0 ? '<span class="late"> · en retard de ' + (-d) + ' j</span>' : d <= 7 ? '<span class="soon"> · dans ' + d + ' j</span>' : "";
+        return '<li><button class="cl" type="button" data-i="' + clients.indexOf(c) + '"><span class="em">' + esc(c.email) + '</span>' +
+          '<span class="sub">' + esc(ST[c.statut] || c.statut) + ' · +' + (c.espace_extra_go || 0) + ' Go · échéance ' + fmtDate(c.echeance) + note + '</span></button></li>';
+      }).join("") : '<li class="sub">Aucun client.</li>') + '</ul>' +
+      '<button id="adm-close" class="btn ghost wide" type="button">Fermer</button></div>';
+    var q = sheet.querySelector("#adm-q");
+    q.addEventListener("input", function () {
+      var v = q.value, pos = q.selectionStart;
+      renderList(v);
+      var q2 = sheet.querySelector("#adm-q"); q2.focus(); try { q2.setSelectionRange(pos, pos); } catch (e) {}
+    });
+    sheet.querySelector("#adm-close").addEventListener("click", function () { sheet.hidden = true; });
+    Array.prototype.forEach.call(sheet.querySelectorAll("button.cl"), function (b) {
+      b.addEventListener("click", function () { current = clients[Number(b.getAttribute("data-i"))]; renderPay(); });
+    });
+  }
+  function renderPay() {
+    var c = current, x0 = c.espace_extra_go || 0;
+    var opts = [0, 5, 10, 20, 50];
+    if (opts.indexOf(x0) < 0) opts.push(x0);
+    opts.sort(function (a, b) { return a - b; });
+    sheet.innerHTML =
+      '<div class="in"><h2>Enregistrer un paiement</h2>' +
+      '<div class="card"><div class="em">' + esc(c.email) + '</div>' +
+      '<div class="sub">' + esc(ST[c.statut] || c.statut) + ' · +' + x0 + ' Go · échéance ' + fmtDate(c.echeance) + '</div></div>' +
+      '<div><label for="adm-x">Espace en plus</label><select id="adm-x">' +
+      opts.map(function (o) { return '<option value="' + o + '"' + (o === x0 ? " selected" : "") + '>' + (o === 0 ? "Aucun (3 Go)" : "+ " + o + " Go (" + (3 + o) + " Go au total)") + '</option>'; }).join("") +
+      '</select></div>' +
+      '<div><label for="adm-m">Montant reçu (FCFA)</label><input id="adm-m" type="number" inputmode="numeric" min="0" value="' + amountFor(x0) + '"></div>' +
+      '<div><label for="adm-o">Reçu par</label><select id="adm-o"><option>MTN</option><option>Orange</option><option>Autre</option></select></div>' +
+      '<p class="sub" id="adm-info"></p>' +
+      '<button id="adm-ok" class="btn wide" type="button">Paiement reçu</button>' +
+      '<button id="adm-back" class="btn ghost wide" type="button">Retour</button></div>';
+    var sx = sheet.querySelector("#adm-x"), sm = sheet.querySelector("#adm-m"), info = sheet.querySelector("#adm-info");
+    function upd() {
+      var base = Math.max(new Date().setHours(0, 0, 0, 0), c.echeance ? new Date(c.echeance + "T00:00:00").getTime() : 0);
+      var fin = new Date(base + 90 * 86400000);
+      info.textContent = "Nouvelle échéance : " + fin.toLocaleDateString("fr-FR") + " (+90 jours). Le compte passe à « Actif ».";
+    }
+    upd();
+    sx.addEventListener("change", function () { sm.value = amountFor(Number(sx.value) || 0); });
+    sheet.querySelector("#adm-back").addEventListener("click", function () { renderList(""); });
+    var ok = sheet.querySelector("#adm-ok");
+    ok.addEventListener("click", async function () {
+      var montant = Math.round(Number(sm.value));
+      if (!(montant >= 0)) { showToast("Montant invalide."); return; }
+      if (!window.confirm("Confirmer : " + fmtF(montant) + " reçus de " + c.email + " ?")) return;
+      ok.disabled = true; ok.textContent = "Enregistrement…";
+      var r = await db.rpc("admin_enregistrer_paiement", {
+        p_email: c.email, p_montant: montant,
+        p_operateur: sheet.querySelector("#adm-o").value, p_extra: Number(sx.value) || 0
+      });
+      if (r.error) { ok.disabled = false; ok.textContent = "Paiement reçu"; showToast("Échec : " + (r.error.message || "erreur")); return; }
+      showToast("Paiement enregistré pour " + c.email);
+      await load();
+      renderList("");
+    });
+  }
+  async function openAdmin() {
+    ensureSheet();
+    sheet.hidden = false;
+    sheet.innerHTML = '<div class="in"><h2>Administration</h2><p class="sub">Chargement…</p></div>';
+    if (await load()) renderList(""); else sheet.hidden = true;
+  }
+  function addButton() {
+    if (document.getElementById("adm-open")) return;
+    var tools = appView.querySelector(".tools");
+    if (!tools) return;
+    var b = document.createElement("button");
+    b.id = "adm-open"; b.type = "button"; b.className = "btn ghost"; b.textContent = "Administration";
+    b.addEventListener("click", openAdmin);
+    tools.appendChild(b);
+  }
+  async function check() {
+    if (checking) return;
+    checking = true;
+    try {
+      var r = await db.rpc("est_admin");
+      isAdmin = !!(r && !r.error && r.data === true);
+      var old = document.getElementById("adm-open");
+      if (isAdmin) addButton(); else if (old) old.remove();
+    } catch (e) {} finally { checking = false; }
+  }
+  db.auth.onAuthStateChange(function () { setTimeout(check, 1000); });
+  setTimeout(check, 1800);
+})();
+  (function () {
   var running = false, input, zoneInfo, progBox, progBar, progText, retryBtn, origAccept;
 
   function addStyle() {
