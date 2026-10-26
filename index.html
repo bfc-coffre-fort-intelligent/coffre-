@@ -466,8 +466,9 @@ try {
   (function () {
   var GO = 1024 * 1024 * 1024;
   var extraGo = 0;
-  function limitBytes() { return (3 + extraGo) * GO; }
-  function limitLabel() { return (3 + extraGo) + " Go"; }
+  var trial = false;
+  function limitBytes() { return (trial ? 1 : 3 + extraGo) * GO; }
+  function limitLabel() { return trial ? "1 Go (essai)" : (3 + extraGo) + " Go"; }
   var used = 0, box = null, timer = null;
   function fmt(n) {
     if (n >= 1073741824) return (n / 1073741824).toFixed(2).replace(".", ",") + " Go";
@@ -489,6 +490,7 @@ try {
   var MTN_NUMBER = "671732552", MTN_SHOWN = "6 71 73 25 52";
   var OM_NUMBER = "696166593", OM_SHOWN = "6 96 16 65 93";
   var WA_NUMBER = MTN_NUMBER;
+  window.__bfcOpenPay = function () { openPay(); };
   var paySheet = null;
   function payAmount(extra) { return extra > 0 ? 2700 + 300 * extra : 3000; }
   function fmtF(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " FCFA"; }
@@ -584,8 +586,8 @@ try {
   async function refresh() {
     try {
       try {
-        var ab = await db.from("abonnements").select("espace_extra_go");
-        if (ab && !ab.error && ab.data && ab.data.length) { extraGo = Math.max(0, Number(ab.data[0].espace_extra_go) || 0); }
+        var ab = await db.from("abonnements").select("espace_extra_go,statut");
+        if (ab && !ab.error && ab.data && ab.data.length) { extraGo = Math.max(0, Number(ab.data[0].espace_extra_go) || 0); trial = ab.data[0].statut === "essai"; }
       } catch (e2) {}
       var r = await db.from("documents").select("taille_octets");
       if (r.error || !r.data) return;
@@ -666,20 +668,21 @@ try {
     var f = (filter || "").trim().toLowerCase();
     var n = { essai: 0, actif: 0, retard: 0 };
     clients.forEach(function (c) {
+      var dd = daysLeft(c.echeance);
       if (c.statut === "essai") n.essai++;
       else if (c.statut === "actif") n.actif++;
-      else if (c.statut === "grace" || c.statut === "lecture_seule") n.retard++;
+      if ((c.statut === "essai" || c.statut === "actif") && dd !== null && dd < 0) n.retard++;
     });
     var rows = clients.filter(function (c) { return !f || String(c.email || "").toLowerCase().indexOf(f) >= 0; });
     sheet.innerHTML =
       '<div class="in"><h2>Administration</h2>' +
       '<div class="stats"><div class="stat"><b>' + clients.length + '</b><span>comptes</span></div>' +
       '<div class="stat"><b>' + n.actif + '</b><span>actifs</span></div>' +
-      '<div class="stat"><b>' + n.retard + '</b><span>en retard</span></div></div>' +
+      '<div class="stat"><b>' + n.retard + '</b><span>échéance dépassée</span></div></div>' +
       '<input id="adm-q" type="search" placeholder="Chercher un e-mail" value="' + esc(filter || "") + '">' +
       '<ul>' + (rows.length ? rows.map(function (c, i) {
         var d = daysLeft(c.echeance), note = "";
-        if (d !== null) note = d < 0 ? '<span class="late"> · en retard de ' + (-d) + ' j</span>' : d <= 7 ? '<span class="soon"> · dans ' + d + ' j</span>' : "";
+        if (d !== null) note = d < 0 ? '<span class="late"> · ' + (c.statut === "essai" ? "essai terminé depuis " : "en retard de ") + (-d) + ' j</span>' : d <= 7 ? '<span class="soon"> · dans ' + d + ' j</span>' : "";
         return '<li><button class="cl" type="button" data-i="' + clients.indexOf(c) + '"><span class="em">' + esc(c.email) + '</span>' +
           '<span class="sub">' + esc(ST[c.statut] || c.statut) + ' · +' + (c.espace_extra_go || 0) + ' Go · échéance ' + fmtDate(c.echeance) + note + '</span></button></li>';
       }).join("") : '<li class="sub">Aucun client.</li>') + '</ul>' +
@@ -711,6 +714,7 @@ try {
       '<div><label for="adm-o">Reçu par</label><select id="adm-o"><option>MTN</option><option>Orange</option><option>Autre</option></select></div>' +
       '<p class="sub" id="adm-info"></p>' +
       '<button id="adm-ok" class="btn wide" type="button">Paiement reçu</button>' +
+      (c.statut === "essai" ? '<button id="adm-prol" class="btn ghost wide" type="button">Prolonger l\'essai de 7 jours</button>' : '') +
       '<button id="adm-back" class="btn ghost wide" type="button">Retour</button></div>';
     var sx = sheet.querySelector("#adm-x"), sm = sheet.querySelector("#adm-m"), info = sheet.querySelector("#adm-info");
     function upd() {
@@ -721,6 +725,16 @@ try {
     upd();
     sx.addEventListener("change", function () { sm.value = amountFor(Number(sx.value) || 0); });
     sheet.querySelector("#adm-back").addEventListener("click", function () { renderList(""); });
+    var pr = sheet.querySelector("#adm-prol");
+    if (pr) pr.addEventListener("click", async function () {
+      if (!window.confirm("Prolonger l'essai de " + c.email + " de 7 jours ?")) return;
+      pr.disabled = true;
+      var r2 = await db.rpc("admin_prolonger_essai", { p_email: c.email, p_jours: 7 });
+      if (r2.error) { pr.disabled = false; showToast("Échec : " + (r2.error.message || "erreur")); return; }
+      showToast("Essai prolongé de 7 jours pour " + c.email);
+      await load();
+      renderList("");
+    });
     var ok = sheet.querySelector("#adm-ok");
     ok.addEventListener("click", async function () {
       var montant = Math.round(Number(sm.value));
@@ -764,6 +778,85 @@ try {
   }
   db.auth.onAuthStateChange(function () { setTimeout(check, 1000); });
   setTimeout(check, 1800);
+})();
+  (function () {
+  // Essai de 7 jours, lecture seule ensuite : affichage (la vraie règle est appliquée par la base).
+  var info = null, canAdd = true, isAdmin = false, banner = null, timer = null, origText = null;
+  function daysLeft(s) {
+    if (!s) return null;
+    var t = new Date(s + "T00:00:00"), n = new Date(); n.setHours(0, 0, 0, 0);
+    return Math.round((t - n) / 86400000);
+  }
+  function fmtDate(s) { var p = String(s || "").split("-"); return p.length === 3 ? p[2] + "/" + p[1] + "/" + p[0] : ""; }
+  function plural(n, w) { return n + " " + w + (n > 1 ? "s" : ""); }
+  function message() {
+    if (isAdmin || !info) return null;
+    var d = daysLeft(info.echeance);
+    if (d === null) return null;
+    if (info.statut === "essai") {
+      if (d >= 0) {
+        return { warn: d <= 2, text: d === 0
+          ? "Dernier jour de votre essai gratuit. Ensuite, le compte passe en lecture seule tant que l'abonnement n'est pas payé."
+          : "Essai gratuit : il vous reste " + plural(d, "jour") + " (jusqu'au " + fmtDate(info.echeance) + "). Ensuite, le compte passe en lecture seule tant que l'abonnement n'est pas payé." };
+      }
+      return { warn: true, text: "Votre essai est terminé. Vous pouvez voir et télécharger vos documents, mais plus en ajouter. Payez votre abonnement pour tout réactiver." };
+    }
+    if (info.statut === "actif") {
+      if (d < -15) return { warn: true, text: "Votre abonnement a expiré. Vous pouvez voir et télécharger vos documents, mais plus en ajouter. Payez votre abonnement pour tout réactiver." };
+      if (d < 0) return { warn: true, text: "Votre abonnement est arrivé à échéance. Il vous reste " + plural(15 + d, "jour") + " pour payer avant le passage en lecture seule." };
+      if (d <= 7) return { warn: false, text: "Votre abonnement se termine le " + fmtDate(info.echeance) + "." };
+      return null;
+    }
+    return { warn: true, text: "Votre compte est en lecture seule. Vous pouvez voir et télécharger vos documents. Payez votre abonnement pour tout réactiver." };
+  }
+  function render() {
+    var tools = appView.querySelector(".tools");
+    if (!tools) return;
+    var m = message();
+    if (!m) { if (banner) { banner.remove(); banner = null; } }
+    else {
+      if (!banner || !document.body.contains(banner)) {
+        banner = document.createElement("div");
+        banner.id = "abo-banner";
+        tools.parentNode.insertBefore(banner, tools);
+      }
+      banner.style.cssText = "margin:10px 0;padding:12px 14px;border-radius:12px;font-size:15px;line-height:1.45;border:1px solid " + (m.warn ? "#C48A2C" : "var(--line)") + ";background:" + (m.warn ? "#FFF6E3" : "#fff");
+      banner.innerHTML = '<div></div><button type="button" class="btn small" style="margin-top:8px" id="abo-pay">Payer mon abonnement</button>';
+      banner.firstChild.textContent = m.text;
+      banner.querySelector("#abo-pay").addEventListener("click", function () { if (window.__bfcOpenPay) window.__bfcOpenPay(); });
+    }
+    var add = document.getElementById("toggle-add");
+    if (add) {
+      if (origText === null) origText = add.textContent;
+      if (!canAdd) {
+        add.disabled = true;
+        add.textContent = "Ajout indisponible (lecture seule)";
+        add.style.opacity = ".6";
+        var panel = document.getElementById("upload-panel");
+        if (panel) panel.hidden = true;
+      } else {
+        if (add.disabled) { add.disabled = false; add.textContent = origText; add.style.opacity = ""; }
+      }
+    }
+  }
+  async function refresh() {
+    try {
+      var p = await db.rpc("peut_ajouter");
+      canAdd = !(p && !p.error && p.data === false);
+      var a = await db.rpc("est_admin");
+      isAdmin = !!(a && !a.error && a.data === true);
+      var ab = await db.from("abonnements").select("statut,echeance");
+      info = ab && !ab.error && ab.data && ab.data[0] ? ab.data[0] : null;
+    } catch (e) {}
+    render();
+  }
+  new MutationObserver(function (muts) {
+    if (muts.every(function (m) { return banner && banner.contains(m.target); })) return;
+    clearTimeout(timer);
+    timer = setTimeout(render, 300);
+  }).observe(appView, { childList: true });
+  db.auth.onAuthStateChange(function () { setTimeout(refresh, 900); });
+  setTimeout(refresh, 1700);
 })();
   (function () {
   var running = false, input, zoneInfo, progBox, progBar, progText, retryBtn, origAccept;
