@@ -770,6 +770,13 @@ try {
     if (checking) return;
     checking = true;
     try {
+      var ses = await db.auth.getSession();
+      if (!(ses && ses.data && ses.data.session)) {
+        isAdmin = false;
+        var o0 = document.getElementById("adm-open");
+        if (o0) o0.remove();
+        return;
+      }
       var r = await db.rpc("est_admin");
       isAdmin = !!(r && !r.error && r.data === true);
       var old = document.getElementById("adm-open");
@@ -841,6 +848,8 @@ try {
   }
   async function refresh() {
     try {
+      var ses = await db.auth.getSession();
+      if (!(ses && ses.data && ses.data.session)) { canAdd = true; isAdmin = false; info = null; render(); return; }
       var p = await db.rpc("peut_ajouter");
       canAdd = !(p && !p.error && p.data === false);
       var a = await db.rpc("est_admin");
