@@ -1635,10 +1635,10 @@ try {
           '<style>body{font:16px/1.5 system-ui,sans-serif;max-width:720px;margin:0 auto;padding:16px;color:#12372A}h1{font-size:24px}h2{margin-top:28px;font-size:18px;border-bottom:1px solid #D5DDD8}li{margin:8px 0}small{color:#5b6b63}</style></head><body>' +
           '<h1>Mes données – BFC Safe Family</h1><p><small>Fichier créé le ' + day(new Date()) + '.</small></p>' +
           '<h2>Mon compte</h2><p>Adresse e-mail : ' + esc(user.email) + '<br>Compte créé le : ' + day(user.created_at) + '</p>' +
-          '<h2>Profils</h2><ul><li>Moi-même</li>' + profs.map(function (p) { return "<li>" + esc(p.nom) + "</li>"; }).join("") + "</ul>" +
+          '<h2>Profils</h2><ul><li>' + esc(selfName()) + '</li>' + profs.map(function (p) { return "<li>" + esc(p.nom) + "</li>"; }).join("") + "</ul>" +
           '<h2>Documents (' + docs.length + ')</h2><p><small>Les liens de téléchargement sont valables 7 jours. Passé ce délai, refaites « Télécharger mes données ».</small></p><ul>' +
           docs.map(function (d) {
-            var who = d.profil_id ? (names[d.profil_id] || "Profil") : "Moi-même";
+            var who = d.profil_id ? (names[d.profil_id] || "Profil") : selfName();
             var meta = [who, d.type, d.annee, d.etablissement, "ajouté le " + day(d.cree_le)].filter(Boolean).map(esc).join(" · ");
             var u = urls[d.chemin_fichier];
             return "<li><strong>" + esc(d.titre) + "</strong><br><small>" + meta + "</small>" +
@@ -1673,11 +1673,17 @@ try {
     renderProfiles();
   }
 
+  function selfName() {
+    var m = currentUser && currentUser.user_metadata;
+    var n = m && typeof m.nom_moi === "string" ? m.nom_moi.trim() : "";
+    return n || "Moi-même";
+  }
+
   function renderProfiles() {
     var chips = [];
     chips.push(
       '<button class="profile-chip" type="button" role="tab" data-id="self" aria-pressed="' +
-      (selectedProfileId === "self") + '">Moi-même</button>'
+      (selectedProfileId === "self") + '">' + esc(selfName()) + '</button>'
     );
     profiles.forEach(function (p) {
       chips.push(
@@ -1697,6 +1703,83 @@ try {
     });
     var addBtn = $("add-profile");
     if (addBtn) addBtn.addEventListener("click", openProfileModal);
+    var edBtn = $("edit-names");
+    if (!edBtn) {
+      edBtn = document.createElement("button");
+      edBtn.id = "edit-names"; edBtn.type = "button"; edBtn.className = "btn ghost small";
+      edBtn.style.margin = "6px 0 2px"; edBtn.textContent = "Modifier les noms";
+      edBtn.addEventListener("click", openNamesModal);
+      profilesBar.insertAdjacentElement("afterend", edBtn);
+    }
+  }
+
+  // Fenêtre « Modifier les noms » : « Moi-même » + chaque profil
+  function openNamesModal() {
+    var bg = $("names-modal-bg");
+    if (!bg) {
+      bg = document.createElement("div");
+      bg.id = "names-modal-bg"; bg.className = "modal-bg"; bg.hidden = true;
+      bg.innerHTML = '<div class="modal"><h2>Modifier les noms</h2>' +
+        '<form id="names-form" novalidate><div id="names-fields"></div>' +
+        '<p id="names-notice" class="notice" role="alert" hidden></p>' +
+        '<div class="modal-actions"><button id="names-cancel" class="btn ghost" type="button">Annuler</button>' +
+        '<button id="names-save" class="btn" type="submit">Enregistrer</button></div></form></div>';
+      document.body.appendChild(bg);
+      bg.addEventListener("click", function (e) { if (e.target === bg) bg.hidden = true; });
+      $("names-cancel").addEventListener("click", function () { bg.hidden = true; });
+      $("names-form").addEventListener("submit", saveNames);
+    }
+    var m = currentUser && currentUser.user_metadata;
+    var cur = m && typeof m.nom_moi === "string" ? m.nom_moi : "";
+    var f = '<label for="nm-self" style="margin-top:0">Votre nom (remplace « Moi-même »)</label>' +
+      '<input id="nm-self" type="text" maxlength="40" autocomplete="off" placeholder="Moi-même" value="' + esc(cur) + '">';
+    profiles.forEach(function (p, i) {
+      f += '<label for="nm-' + i + '">Profil ' + (i + 1) + '</label>' +
+        '<input id="nm-' + i + '" type="text" maxlength="40" autocomplete="off" data-id="' + esc(p.id) + '" value="' + esc(p.nom) + '">';
+    });
+    $("names-fields").innerHTML = f;
+    setNotice($("names-notice"), "");
+    bg.hidden = false;
+    $("nm-self").focus();
+  }
+
+  async function saveNames(e) {
+    e.preventDefault();
+    var notice = $("names-notice"), btn = $("names-save");
+    setNotice(notice, "");
+    var inputs = Array.prototype.slice.call($("names-fields").querySelectorAll("input[data-id]"));
+    for (var i = 0; i < inputs.length; i++) {
+      if (!inputs[i].value.trim()) { setNotice(notice, "Un profil ne peut pas rester sans nom.", "error"); return; }
+    }
+    btn.disabled = true; btn.textContent = "Enregistrement…";
+    try {
+      // 1) profils renommés
+      for (var j = 0; j < inputs.length; j++) {
+        var id = inputs[j].getAttribute("data-id"), nom = inputs[j].value.trim();
+        var p = profiles.filter(function (x) { return x.id === id; })[0];
+        if (!p || p.nom === nom) continue;
+        var r = await db.from("profils").update({ nom: nom }).eq("id", id).select();
+        if (r.error) throw new Error(fr(r.error.message));
+        if (!r.data || !r.data.length) throw new Error("Modification refusée. Réessayez, ou contactez-nous si cela continue.");
+        p.nom = nom;
+      }
+      // 2) nom de « Moi-même »
+      var self = $("nm-self").value.trim();
+      var m = (currentUser && currentUser.user_metadata) || {};
+      if ((m.nom_moi || "") !== self) {
+        var u = await db.auth.updateUser({ data: { nom_moi: self } });
+        if (u.error) throw new Error(fr(u.error.message));
+        if (u.data && u.data.user) currentUser = u.data.user;
+      }
+      $("names-modal-bg").hidden = true;
+      renderProfiles();
+      renderDocs();
+      showToast("Noms enregistrés.");
+    } catch (err) {
+      setNotice(notice, err && err.message ? err.message : "Une erreur est survenue.", "error");
+    } finally {
+      btn.disabled = false; btn.textContent = "Enregistrer";
+    }
   }
 
   function openProfileModal() {
