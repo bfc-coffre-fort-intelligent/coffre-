@@ -4,6 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#12372A">
+<script>
+// Visiteur non connecté qui arrive sur le site : page d'accueil d'abord (jamais pour l'application installée, ni les liens e-mail)
+(function () {
+  try {
+    if (location.hash || location.search) return;
+    if ((window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone) return;
+    for (var k in localStorage) { if (k.indexOf("sb-") === 0 && k.slice(-11) === "-auth-token") return; }
+    location.replace("accueil.html");
+  } catch (e) {}
+})();
+</script>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
@@ -278,6 +289,7 @@ input[type=file]{height:auto;padding:10px 12px}
   }
   $("tab-login").addEventListener("click", function () { setMode("login"); });
   $("tab-signup").addEventListener("click", function () { setMode("signup"); });
+  if (/[?&]inscription=1/.test(location.search)) setMode("signup");
 
   authForm.addEventListener("submit", async function (e) {
     e.preventDefault();
