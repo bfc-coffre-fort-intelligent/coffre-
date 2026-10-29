@@ -163,6 +163,9 @@ input[type=file]{height:auto;padding:10px 12px}
           <option>Certificat</option>
           <option>Attestation de réussite</option>
           <option>Diplôme</option>
+          <option>Pièce d'identité</option>
+          <option>Passeport</option>
+          <option>Permis de conduire</option>
           <option>Photo d'école</option>
           <option>Vidéo</option>
           <option>Autre</option>
@@ -171,6 +174,9 @@ input[type=file]{height:auto;padding:10px 12px}
         <input id="annee" type="number" inputmode="numeric" min="1980" max="2100">
         <label for="etab">Établissement</label>
         <input id="etab" type="text" autocomplete="organization">
+        <label for="expire">Date d'expiration (facultatif)</label>
+        <input id="expire" type="date">
+        <p class="hint">Passeport, carte d'identité, permis… nous vous le rappelons avant la date.</p>
         <label for="file">Fichier</label>
         <input id="file" type="file" accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt">
         <p class="hint">Photo, PDF, Word, Excel ou vidéo. 50 Mo maximum.</p>
@@ -416,63 +422,305 @@ try {
     });
   }
 } catch (e) {}
+ window.__bfcExpire = function () { var e = document.getElementById("expire"); return e && e.value ? { expire_le: e.value } : {}; };
  (function () {
-  var MAX = 2000, QUALITY = 0.82, keep = false;
-  function shrink(file) {
-    return new Promise(function (resolve) {
-      if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return resolve(file);
+  /* Scanner : recadrage automatique, éclaircissement, noir et blanc. Tout se fait sur le téléphone. */
+  var MAX = 2000, QUALITY = 0.82, mode = "scan", cache = null, previewUrl = null;
+  function isImg(f) { return f && /^image\/(jpeg|png|webp)$/.test(f.type); }
+  function loadImg(file) {
+    return new Promise(function (resolve, reject) {
       var img = new Image(), url = URL.createObjectURL(file);
-      img.onload = function () {
-        var w = img.naturalWidth, h = img.naturalHeight;
-        var s = Math.min(1, MAX / Math.max(w, h));
-        var cv = document.createElement("canvas");
-        cv.width = Math.round(w * s);
-        cv.height = Math.round(h * s);
-        var cx = cv.getContext("2d");
-        cx.fillStyle = "#fff";
-        cx.fillRect(0, 0, cv.width, cv.height);
-        cx.drawImage(img, 0, 0, cv.width, cv.height);
-        URL.revokeObjectURL(url);
-        cv.toBlob(function (b) {
-          if (!b || b.size >= file.size) return resolve(file);
-          var name = file.name.replace(/\.[^.]+$/, "") + ".jpg";
-          resolve(new File([b], name, { type: "image/jpeg" }));
-        }, "image/jpeg", QUALITY);
-      };
-      img.onerror = function () { URL.revokeObjectURL(url); resolve(file); };
+      img.onload = function () { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error("img")); };
       img.src = url;
     });
   }
-  function addOption(input) {
-    if (input.dataset.opt || !input.parentNode) return;
-    input.dataset.opt = "1";
-    var l = document.createElement("label");
-    l.style.cssText = "display:flex;gap:8px;align-items:center;margin-top:8px;font-size:14px";
-    var c = document.createElement("input");
-    c.type = "checkbox";
-    c.style.width = "auto";
-    c.addEventListener("click", function () { keep = c.checked; });
-    l.appendChild(c);
-    l.appendChild(document.createTextNode("Garder la photo originale (plus lourde)"));
-    input.parentNode.insertBefore(l, input.nextSibling);
+  function scaled(img, max) {
+    var w = img.naturalWidth, h = img.naturalHeight, s = Math.min(1, max / Math.max(w, h));
+    var cv = document.createElement("canvas");
+    cv.width = Math.max(1, Math.round(w * s)); cv.height = Math.max(1, Math.round(h * s));
+    var cx = cv.getContext("2d");
+    cx.fillStyle = "#fff"; cx.fillRect(0, 0, cv.width, cv.height);
+    cx.drawImage(img, 0, 0, cv.width, cv.height);
+    return cv;
   }
-  document.querySelectorAll('input[type="file"]').forEach(addOption);
+  function toFile(cv, base) {
+    return new Promise(function (resolve, reject) {
+      cv.toBlob(function (b) {
+        if (!b) return reject(new Error("blob"));
+        resolve(new File([b], base + ".jpg", { type: "image/jpeg" }));
+      }, "image/jpeg", QUALITY);
+    });
+  }
+  function baseName(f) { return f.name.replace(/\.[^.]+$/, ""); }
+
+  /* --- 1. Trouver les 4 coins de la feuille --- */
+  function findQuad(cv) {
+    var S = 320 / Math.max(cv.width, cv.height);
+    var w = Math.max(8, Math.round(cv.width * S)), h = Math.max(8, Math.round(cv.height * S));
+    var sm = document.createElement("canvas"); sm.width = w; sm.height = h;
+    sm.getContext("2d").drawImage(cv, 0, 0, w, h);
+    var d = sm.getContext("2d").getImageData(0, 0, w, h).data, n = w * h;
+    var g = new Uint8Array(n), hist = new Array(256).fill(0), i;
+    for (i = 0; i < n; i++) { var v = (d[i * 4] * 299 + d[i * 4 + 1] * 587 + d[i * 4 + 2] * 114) / 1000 | 0; g[i] = v; hist[v]++; }
+    var sum = 0; for (i = 0; i < 256; i++) sum += i * hist[i];
+    var wb = 0, sb = 0, best = 0, thr = 128;
+    for (i = 0; i < 256; i++) {
+      wb += hist[i]; if (!wb) continue;
+      var wf = n - wb; if (!wf) break;
+      sb += i * hist[i];
+      var mb = sb / wb, mf = (sum - sb) / wf, bt = wb * wf * (mb - mf) * (mb - mf);
+      if (bt > best) { best = bt; thr = i; }
+    }
+    var lab = new Int32Array(n), stack = new Int32Array(n), bestLab = 0, bestSize = 0, cur = 0;
+    for (i = 0; i < n; i++) {
+      if (g[i] <= thr || lab[i]) continue;
+      cur++; var sp = 0, size = 0; stack[sp++] = i; lab[i] = cur;
+      while (sp) {
+        var p = stack[--sp]; size++;
+        var x = p % w, y = (p / w) | 0, q;
+        if (x > 0 && g[q = p - 1] > thr && !lab[q]) { lab[q] = cur; stack[sp++] = q; }
+        if (x < w - 1 && g[q = p + 1] > thr && !lab[q]) { lab[q] = cur; stack[sp++] = q; }
+        if (y > 0 && g[q = p - w] > thr && !lab[q]) { lab[q] = cur; stack[sp++] = q; }
+        if (y < h - 1 && g[q = p + w] > thr && !lab[q]) { lab[q] = cur; stack[sp++] = q; }
+      }
+      if (size > bestSize) { bestSize = size; bestLab = cur; }
+    }
+    if (bestSize < n * 0.18 || bestSize > n * 0.96) return null;
+    var tl = null, tr = null, br = null, bl = null, a, b, c, e;
+    var mn1 = 1e9, mx1 = -1e9, mn2 = 1e9, mx2 = -1e9;
+    for (i = 0; i < n; i++) {
+      if (lab[i] !== bestLab) continue;
+      var x2 = i % w, y2 = (i / w) | 0;
+      a = x2 + y2; b = x2 - y2;
+      if (a < mn1) { mn1 = a; tl = [x2, y2]; }
+      if (a > mx1) { mx1 = a; br = [x2, y2]; }
+      if (b > mx2) { mx2 = b; tr = [x2, y2]; }
+      if (b < mn2) { mn2 = b; bl = [x2, y2]; }
+    }
+    var q = [tl, tr, br, bl];
+    var area = Math.abs((q[0][0] * q[1][1] - q[1][0] * q[0][1]) + (q[1][0] * q[2][1] - q[2][0] * q[1][1]) +
+      (q[2][0] * q[3][1] - q[3][0] * q[2][1]) + (q[3][0] * q[0][1] - q[0][0] * q[3][1])) / 2;
+    if (area < bestSize * 0.7 || area < n * 0.15) return null;
+    return q.map(function (p) { return [(p[0] + 0.5) / S, (p[1] + 0.5) / S]; });
+  }
+
+  /* --- 2. Redresser la feuille (transformation de perspective) --- */
+  function solve(A, B) {
+    var n = B.length, i, j, k;
+    for (i = 0; i < n; i++) {
+      var m = i;
+      for (j = i + 1; j < n; j++) if (Math.abs(A[j][i]) > Math.abs(A[m][i])) m = j;
+      var t = A[i]; A[i] = A[m]; A[m] = t; var tb = B[i]; B[i] = B[m]; B[m] = tb;
+      if (Math.abs(A[i][i]) < 1e-9) return null;
+      for (j = i + 1; j < n; j++) {
+        var f = A[j][i] / A[i][i];
+        for (k = i; k < n; k++) A[j][k] -= f * A[i][k];
+        B[j] -= f * B[i];
+      }
+    }
+    var x = new Array(n);
+    for (i = n - 1; i >= 0; i--) {
+      var s = B[i];
+      for (j = i + 1; j < n; j++) s -= A[i][j] * x[j];
+      x[i] = s / A[i][i];
+    }
+    return x;
+  }
+  function dist(p, q) { return Math.hypot(p[0] - q[0], p[1] - q[1]); }
+  function warp(cv, q) {
+    var W = Math.round(Math.max(dist(q[0], q[1]), dist(q[3], q[2]))), H = Math.round(Math.max(dist(q[0], q[3]), dist(q[1], q[2])));
+    if (W < 50 || H < 50) return null;
+    var k = Math.min(1, MAX / Math.max(W, H)); W = Math.round(W * k); H = Math.round(H * k);
+    var dst = [[0, 0], [W, 0], [W, H], [0, H]], A = [], B = [], i;
+    for (i = 0; i < 4; i++) {
+      var X = dst[i][0], Y = dst[i][1], u = q[i][0], v = q[i][1];
+      A.push([X, Y, 1, 0, 0, 0, -X * u, -Y * u]); B.push(u);
+      A.push([0, 0, 0, X, Y, 1, -X * v, -Y * v]); B.push(v);
+    }
+    var hm = solve(A, B); if (!hm) return null;
+    var out = document.createElement("canvas"); out.width = W; out.height = H;
+    var sc = cv.getContext("2d"), sd = sc.getImageData(0, 0, cv.width, cv.height), s = sd.data, sw = cv.width, sh = cv.height;
+    var oc = out.getContext("2d"), od = oc.createImageData(W, H), o = od.data, x, y, idx = 0;
+    for (y = 0; y < H; y++) {
+      for (x = 0; x < W; x++, idx += 4) {
+        var den = hm[6] * x + hm[7] * y + 1;
+        var sx = (hm[0] * x + hm[1] * y + hm[2]) / den, sy = (hm[3] * x + hm[4] * y + hm[5]) / den;
+        if (sx < 0) sx = 0; else if (sx > sw - 1.001) sx = sw - 1.001;
+        if (sy < 0) sy = 0; else if (sy > sh - 1.001) sy = sh - 1.001;
+        var x0 = sx | 0, y0 = sy | 0, fx = sx - x0, fy = sy - y0, p0 = (y0 * sw + x0) * 4, p1 = p0 + 4, p2 = p0 + sw * 4, p3 = p2 + 4;
+        for (var c = 0; c < 3; c++) {
+          o[idx + c] = (s[p0 + c] * (1 - fx) + s[p1 + c] * fx) * (1 - fy) + (s[p2 + c] * (1 - fx) + s[p3 + c] * fx) * fy;
+        }
+        o[idx + 3] = 255;
+      }
+    }
+    oc.putImageData(od, 0, 0);
+    return out;
+  }
+
+  /* --- 3. Éclaircir : enlever les ombres, blanchir le papier, renforcer l'encre --- */
+  function cloneCanvas(cv) {
+    var c = document.createElement("canvas"); c.width = cv.width; c.height = cv.height;
+    c.getContext("2d").drawImage(cv, 0, 0); return c;
+  }
+  function enhance(cv, bw) {
+    var w = cv.width, h = cv.height, out = cloneCanvas(cv), cx = out.getContext("2d");
+    var bgS = Math.max(1, Math.round(Math.max(w, h) / 28));
+    var sw = Math.max(2, Math.round(w / bgS)), sh = Math.max(2, Math.round(h / bgS));
+    var small = document.createElement("canvas"); small.width = sw; small.height = sh;
+    var sx = small.getContext("2d"); sx.imageSmoothingQuality = "high"; sx.drawImage(cv, 0, 0, sw, sh);
+    var sd = sx.getImageData(0, 0, sw, sh).data;
+    /* le fond est estimé par les zones les plus claires autour de chaque point (maximum local) */
+    var bgd = new Uint8ClampedArray(sw * sh * 4), x, y, c, dx, dy, R = 2;
+    for (y = 0; y < sh; y++) for (x = 0; x < sw; x++) for (c = 0; c < 3; c++) {
+      var m = 0;
+      for (dy = -R; dy <= R; dy++) for (dx = -R; dx <= R; dx++) {
+        var xx = Math.min(sw - 1, Math.max(0, x + dx)), yy = Math.min(sh - 1, Math.max(0, y + dy));
+        var vv = sd[(yy * sw + xx) * 4 + c]; if (vv > m) m = vv;
+      }
+      bgd[(y * sw + x) * 4 + c] = m; bgd[(y * sw + x) * 4 + 3] = 255;
+    }
+    var bgc = document.createElement("canvas"); bgc.width = sw; bgc.height = sh;
+    bgc.getContext("2d").putImageData(new ImageData(bgd, sw, sh), 0, 0);
+    var big = document.createElement("canvas"); big.width = w; big.height = h;
+    var bx = big.getContext("2d"); bx.imageSmoothingQuality = "high"; bx.drawImage(bgc, 0, 0, w, h);
+    var bd = bx.getImageData(0, 0, w, h).data, id = cx.getImageData(0, 0, w, h), d = id.data, n = w * h, i;
+    var hist = new Array(256).fill(0);
+    for (i = 0; i < n; i++) {
+      var p = i * 4, gsum = 0;
+      for (c = 0; c < 3; c++) {
+        var v = d[p + c] / Math.max(40, bd[p + c]) * 250; if (v > 255) v = 255; d[p + c] = v; gsum += v;
+      }
+      hist[(gsum / 3) | 0]++;
+    }
+    var lo = 0, hi = 255, acc = 0;
+    for (i = 0; i < 256; i++) { acc += hist[i]; if (acc > n * 0.01) { lo = i; break; } }
+    acc = 0; for (i = 255; i >= 0; i--) { acc += hist[i]; if (acc > n * 0.2) { hi = i; break; } }
+    if (hi - lo < 60) { lo = Math.max(0, hi - 120); }
+    for (i = 0; i < n; i++) {
+      var p2 = i * 4;
+      for (c = 0; c < 3; c++) {
+        var t = (d[p2 + c] - lo) / (hi - lo); t = t < 0 ? 0 : t > 1 ? 1 : t;
+        d[p2 + c] = Math.pow(t, 1.15) * 255;
+      }
+      if (bw) {
+        var gg = (d[p2] * 299 + d[p2 + 1] * 587 + d[p2 + 2] * 114) / 1000;
+        var tt = (gg - 120) / 70; tt = tt < 0 ? 0 : tt > 1 ? 1 : tt; tt = tt * tt * (3 - 2 * tt) * 255;
+        d[p2] = d[p2 + 1] = d[p2 + 2] = tt;
+      }
+    }
+    cx.putImageData(id, 0, 0);
+    return out;
+  }
+
+  async function makeScan(file) {
+    var img = await loadImg(file), cv = scaled(img, MAX), found = false, base = cv;
+    try {
+      var q = findQuad(cv);
+      if (q) { var wp = warp(cv, q); if (wp) { base = wp; found = true; } }
+    } catch (e) {}
+    return { base: base, found: found };
+  }
+
+  /* --- Interface : aperçu + 3 choix --- */
+  var css = document.createElement("style");
+  css.textContent =
+    "#scan-box{margin-top:10px;border:1.5px solid var(--line);border-radius:12px;padding:10px;background:#fff}" +
+    "#scan-box[hidden]{display:none}" +
+    "#scan-img{display:block;max-width:100%;max-height:260px;margin:0 auto 8px;border-radius:8px;background:#EEF1EF}" +
+    "#scan-box .seg{display:flex;gap:6px}" +
+    "#scan-box .seg button{flex:1;min-height:44px;border:1.5px solid var(--line);background:#fff;color:var(--pine);border-radius:10px;font:inherit;font-weight:600;font-size:14px;cursor:pointer}" +
+    "#scan-box .seg button[aria-pressed=true]{background:var(--pine);color:#fff;border-color:var(--pine)}" +
+    "#scan-box .hint{margin:8px 0 0}";
+  document.head.appendChild(css);
+
+  function ensureBox(input) {
+    var box = document.getElementById("scan-box");
+    if (box) return box;
+    box = document.createElement("div");
+    box.id = "scan-box"; box.hidden = true;
+    box.innerHTML = '<img id="scan-img" alt="Aperçu du document"><div class="seg" role="group" aria-label="Version du document">' +
+      '<button type="button" data-m="orig" aria-pressed="false">Original</button>' +
+      '<button type="button" data-m="scan" aria-pressed="true">Scan</button>' +
+      '<button type="button" data-m="bw" aria-pressed="false">Noir et blanc</button></div>' +
+      '<p class="hint" id="scan-hint"></p>';
+    var anchor = document.getElementById("pick-info") || input;
+    var host = anchor.parentNode;
+    host.insertBefore(box, anchor.nextSibling);
+    box.querySelector(".seg").addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-m]"); if (!b) return;
+      choose(input, b.getAttribute("data-m"));
+    });
+    return box;
+  }
+  function setPreview(file) {
+    var img = document.getElementById("scan-img");
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(file); img.src = previewUrl;
+  }
+  function useFile(input, file, quiet) {
+    var dt = new DataTransfer(); dt.items.add(file); input.files = dt.files;
+    var pi = document.getElementById("pick-info");
+    if (pi) pi.textContent = "Sélectionné : " + file.name + " (" + (file.size / 1024 < 1024 ? Math.round(file.size / 1024) + " Ko" : (file.size / 1048576).toFixed(1).replace(".", ",") + " Mo") + ")";
+  }
+  async function choose(input, m) {
+    if (!cache) return;
+    var box = ensureBox(input);
+    mode = m;
+    Array.prototype.forEach.call(box.querySelectorAll("button[data-m]"), function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-m") === m)); });
+    if (!cache.files[m]) {
+      if (m === "bw") cache.files.bw = await toFile(enhance(cache.scan.base, true), baseName(cache.orig) + "-nb");
+      else if (m === "scan") cache.files.scan = await toFile(enhance(cache.scan.base, false), baseName(cache.orig) + "-scan");
+      else cache.files.orig = await shrinkPlain(cache.orig);
+    }
+    setPreview(cache.files[m]); useFile(input, cache.files[m]);
+  }
+  function shrinkPlain(file) {
+    return loadImg(file).then(function (img) {
+      var cv = scaled(img, MAX);
+      return new Promise(function (resolve) {
+        cv.toBlob(function (b) {
+          if (!b || b.size >= file.size) return resolve(file);
+          resolve(new File([b], baseName(file) + ".jpg", { type: "image/jpeg" }));
+        }, "image/jpeg", QUALITY);
+      });
+    }).catch(function () { return file; });
+  }
+
   document.addEventListener("change", function (e) {
     var input = e.target;
     if (!input || input.type !== "file") return;
     if (input._done) { input._done = false; return; }
-    if (keep || !input.files || !input.files.length) return;
+    var box = document.getElementById("scan-box");
+    if (!input.files || !input.files.length) { if (box) box.hidden = true; cache = null; return; }
+    var f = input.files[0];
+    if (!isImg(f)) { if (box) box.hidden = true; cache = null; return; }
     e.stopImmediatePropagation();
-    function go() {
-      input._done = true;
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-    }
-    Promise.all(Array.prototype.map.call(input.files, shrink)).then(function (list) {
-      var dt = new DataTransfer();
-      list.forEach(function (f) { dt.items.add(f); });
-      input.files = dt.files;
+    var orig = f;
+    function go() { input._done = true; input.dispatchEvent(new Event("change", { bubbles: true })); }
+    box = ensureBox(input); box.hidden = false;
+    document.getElementById("scan-hint").textContent = "Préparation du scan…";
+    makeScan(orig).then(async function (scan) {
+      cache = { orig: orig, scan: scan, files: {} };
+      mode = "scan";
+      cache.files.scan = await toFile(enhance(scan.base, false), baseName(orig) + "-scan");
+      Array.prototype.forEach.call(box.querySelectorAll("button[data-m]"), function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-m") === "scan")); });
+      setPreview(cache.files.scan);
+      document.getElementById("scan-hint").textContent = scan.found
+        ? "Le document a été recadré et éclairci. Choisissez la version que vous préférez."
+        : "Document non détecté : la photo a seulement été éclaircie. Vous pouvez garder l'original.";
+      useFile(input, cache.files.scan);
       go();
-    }).catch(go);
+    }).catch(function () {
+      box.hidden = true; cache = null;
+      shrinkPlain(orig).then(function (sf) { useFile(input, sf); go(); });
+    });
+  }, true);
+  /* quand le formulaire est remis à zéro après un envoi */
+  document.addEventListener("reset", function () {
+    var box = document.getElementById("scan-box"); if (box) box.hidden = true; cache = null;
+    var pi = document.getElementById("pick-info"); if (pi) pi.textContent = "";
   }, true);
 })();
   (function () {
@@ -1115,7 +1363,7 @@ try {
       }
 
       setProgress(1, "Enregistrement…");
-      var ins = await db.from("documents").insert({
+      var ins = await db.from("documents").insert(Object.assign({
         titre: titre,
         type: $("type").value,
         annee: $("annee").value ? Number($("annee").value) : null,
@@ -1123,7 +1371,7 @@ try {
         chemin_fichier: path,
         taille_octets: f.size,
         profil_id: selectedProfileId === "self" ? null : selectedProfileId
-      });
+      }, window.__bfcExpire()));
       if (ins.error) {
         try { await db.storage.from(BUCKET).remove([path]); } catch (e1) {}
         throw ins.error;
@@ -1952,7 +2200,7 @@ try {
       });
       if (up.error) throw up.error;
 
-      var ins = await db.from("documents").insert({
+      var ins = await db.from("documents").insert(Object.assign({
         titre: titre,
         type: $("type").value,
         annee: $("annee").value ? Number($("annee").value) : null,
@@ -1960,7 +2208,7 @@ try {
         chemin_fichier: path,
         taille_octets: file.size,
         profil_id: selectedProfileId === "self" ? null : selectedProfileId
-      });
+      }, window.__bfcExpire()));
       if (ins.error) {
         await db.storage.from(BUCKET).remove([path]);
         throw ins.error;
@@ -1979,6 +2227,124 @@ try {
       btn.textContent = "Enregistrer dans le coffre";
     }
   });
+  (function () {
+    /* Rappels d'expiration : date facultative sur chaque document, pastille dans la liste, bandeau « À renouveler bientôt » */
+    var s = document.createElement("style");
+    s.textContent =
+      "#docs .doc .d-txt .exp{display:inline-block;margin-top:3px;font-size:12px;font-weight:700;border-radius:999px;padding:2px 9px;background:#EEF1EF;color:var(--muted)}" +
+      "#docs .doc .d-txt .exp.soon{background:#FBF0D5;color:#8A5A00}" +
+      "#docs .doc .d-txt .exp.bad{background:#F8E3E0;color:var(--danger)}" +
+      "#rappels{margin-top:16px;border:1.5px solid var(--brass);background:#FFFBF0;border-radius:12px;padding:12px 14px}" +
+      "#rappels[hidden]{display:none}" +
+      "#rappels strong{display:block;font-family:var(--serif);font-size:18px;color:var(--pine)}" +
+      "#rappels ul{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px;font-size:15px}" +
+      "#rappels .bad{color:var(--danger);font-weight:700}" +
+      "#rappels .soon{color:#8A5A00;font-weight:700}" +
+      "#rappels small{display:block;margin-top:8px;color:var(--muted)}" +
+      "#d-exp{display:grid;gap:6px;border-top:1px solid var(--line);padding-top:10px}" +
+      "#d-exp label{font-weight:600;font-size:14px;margin:0}" +
+      "#d-exp input{width:100%;min-height:48px;border:1.5px solid var(--line);border-radius:10px;padding:0 10px;font:inherit;background:#fff}";
+    document.head.appendChild(s);
+
+    function daysTo(iso) {
+      var p = String(iso || "").split("-");
+      if (p.length !== 3) return null;
+      var t = new Date(); t = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+      var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+      return Math.round((d - t) / 86400000);
+    }
+    function fmtD(iso) { var p = String(iso).split("-"); return p[2] + "/" + p[1] + "/" + p[0]; }
+    function label(iso) {
+      var n = daysTo(iso); if (n === null) return null;
+      if (n < 0) return { t: "Expiré depuis " + (-n) + (n === -1 ? " jour" : " jours"), c: "bad", n: n };
+      if (n === 0) return { t: "Expire aujourd'hui", c: "bad", n: n };
+      if (n <= 30) return { t: "Expire dans " + n + (n === 1 ? " jour" : " jours"), c: "bad", n: n };
+      if (n <= 90) return { t: "Expire dans " + n + " jours", c: "soon", n: n };
+      return { t: "Expire le " + fmtD(iso), c: "", n: n };
+    }
+
+    /* pastilles dans la liste */
+    function chips() {
+      list.querySelectorAll("li.doc[data-c2]:not([data-c3])").forEach(function (li) {
+        var del = li.querySelector("[data-act=del]"), txt = li.querySelector(".d-txt");
+        if (!del || !txt) return;
+        li.setAttribute("data-c3", "1");
+        var d = docs.find(function (x) { return x.id === del.getAttribute("data-id"); });
+        var l = d && d.expire_le ? label(d.expire_le) : null;
+        if (!l) return;
+        var e = document.createElement("div");
+        e.className = "exp " + l.c; e.textContent = "⏰ " + l.t;
+        txt.appendChild(e);
+      });
+    }
+
+    /* bandeau « À renouveler bientôt » (tous profils) */
+    var box = document.createElement("div");
+    box.id = "rappels"; box.hidden = true;
+    var anchor = document.querySelector('label[for="search"]');
+    if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(box, anchor);
+    function who(d) {
+      if (d.profil_id) {
+        var p = (typeof profiles !== "undefined" ? profiles : []).find(function (x) { return x.id === d.profil_id; });
+        return p ? p.nom : "";
+      }
+      return typeof selfName === "function" ? selfName() : "";
+    }
+    function banner() {
+      var items = [];
+      docs.forEach(function (d) {
+        if (!d.expire_le) return;
+        var l = label(d.expire_le);
+        if (l && l.n <= 90) items.push({ d: d, l: l });
+      });
+      if (!items.length) { box.hidden = true; box.innerHTML = ""; return; }
+      items.sort(function (a, b) { return a.l.n - b.l.n; });
+      var show = items.slice(0, 5);
+      box.innerHTML = "<strong>⏰ À renouveler bientôt</strong><ul>" + show.map(function (it) {
+        var w = who(it.d);
+        return "<li>" + esc(it.d.titre) + (w ? " (" + esc(w) + ")" : "") + " : <span class=\"" + it.l.c + "\">" + esc(it.l.t.toLowerCase()) + "</span></li>";
+      }).join("") + "</ul>" + (items.length > 5 ? "<small>et " + (items.length - 5) + " autre(s)</small>" : "");
+      box.hidden = false;
+    }
+    new MutationObserver(function () { chips(); banner(); }).observe(list, { childList: true, subtree: true });
+    chips(); banner();
+
+    /* modifier la date depuis le menu ⋯ */
+    var sheet = document.getElementById("d-sheet");
+    var current = null;
+    if (sheet) {
+      var area = document.createElement("div");
+      area.id = "d-exp";
+      area.innerHTML = '<label for="d-exp-in">Date d\'expiration (facultatif)</label>' +
+        '<input id="d-exp-in" type="date">' +
+        '<button type="button" class="btn wide" id="d-exp-save">Enregistrer la date</button>';
+      var closeBtn = document.getElementById("d-sheet-close");
+      closeBtn.parentNode.insertBefore(area, closeBtn);
+      document.addEventListener("click", function (e) {
+        var more = e.target.closest && e.target.closest(".d-more");
+        if (!more) return;
+        var li = more.closest("li.doc"), del = li && li.querySelector("[data-act=del]");
+        var d = del && docs.find(function (x) { return x.id === del.getAttribute("data-id"); });
+        current = d || null;
+        document.getElementById("d-exp-in").value = (d && d.expire_le) || "";
+      }, true);
+      document.getElementById("d-exp-save").addEventListener("click", async function () {
+        if (!current) return;
+        var v = document.getElementById("d-exp-in").value || null;
+        var b = this; b.disabled = true;
+        var r = await db.from("documents").update({ expire_le: v }).eq("id", current.id).select();
+        b.disabled = false;
+        if (r.error || !r.data || !r.data.length) {
+          showToast("Date non enregistrée. Réessayez dans un instant.");
+          return;
+        }
+        current.expire_le = v;
+        sheet.hidden = true;
+        showToast(v ? "Date d'expiration enregistrée." : "Date d'expiration retirée.");
+        await loadDocs();
+      });
+    }
+  })();
 })();
 </script>
 </body>
