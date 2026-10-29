@@ -85,6 +85,26 @@ section{padding:56px 0}
 @media (min-width:760px){.steps{grid-template-columns:repeat(3,1fr);gap:32px}.steps li{grid-template-columns:1fr;gap:12px}}
 
 /* confiance */
+.chips{list-style:none;margin:22px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:10px}
+.chips li{border:1.5px solid var(--brass);color:var(--pine);background:#fff;border-radius:999px;padding:8px 16px;font-weight:600;font-size:15px}
+.who{list-style:none;margin:24px 0 0;padding:0;display:grid;gap:14px}
+.who li{background:#fff;border:1px solid var(--line);border-left:5px solid var(--brass);border-radius:12px;padding:16px 18px}
+.who strong{display:block;font-family:var(--serif);font-size:20px;color:var(--pine)}
+.who span{color:var(--muted)}
+@media (min-width:760px){.who{grid-template-columns:repeat(2,1fr)}}
+.faq{margin-top:22px;max-width:44em}
+.faq details{border-top:1px solid var(--line);padding:2px 0}
+.faq details:last-child{border-bottom:1px solid var(--line)}
+.faq summary{cursor:pointer;list-style:none;padding:16px 28px 16px 0;font-family:var(--serif);font-size:19px;font-weight:700;color:var(--pine);position:relative}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";position:absolute;right:4px;top:12px;font-size:26px;color:var(--brass);font-family:var(--sans)}
+.faq details[open] summary::after{content:"\2212"}
+.faq p{margin:0 0 16px;color:var(--muted)}
+.split{display:grid;gap:28px;align-items:center}
+.mini{margin:0 auto;width:100%;max-width:300px;border-radius:18px;overflow:hidden;border:3px solid var(--brass);background:var(--pine-deep);box-shadow:0 18px 40px -22px rgba(18,55,42,.6)}
+.mini video{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;background:var(--pine-deep)}
+.mini-cap{margin:10px auto 0;max-width:300px;text-align:center;font-size:14px;color:var(--muted)}
+@media (min-width:760px){.split{grid-template-columns:1fr 300px;gap:48px}.split .price{margin-top:0}.split .trust{margin-top:0}}
 .trust{list-style:none;margin:26px 0 0;padding:0;display:grid;gap:0;max-width:44em}
 .trust li{padding:16px 0 16px 34px;border-top:1px solid var(--line);position:relative}
 .trust li:last-child{border-bottom:1px solid var(--line)}
@@ -182,7 +202,24 @@ footer .slogan{font-family:var(--serif);color:#fff;font-size:19px;margin-bottom:
 
   <section>
     <div class="wrap">
+      <h2 class="sec-title">Pour toute la famille, à chaque étape</h2>
+      <ul class="who">
+        <li><strong>Les parents</strong><span>Bulletins, certificats de scolarité, vaccins, actes de naissance : tout est au même endroit, pour chaque enfant.</span></li>
+        <li><strong>Les élèves et étudiants</strong><span>Diplômes, relevés de notes, attestations de réussite : prêts quand une inscription ou un concours les demande.</span></li>
+        <li><strong>Les familles dispersées</strong><span>Un parent au village, un enfant à l'étranger : les papiers importants restent accessibles à celui qui gère le compte, où qu'il soit.</span></li>
+        <li><strong>Ceux qui déménagent ou voyagent</strong><span>Plus de valise à fouiller. Vos documents vous suivent sur votre téléphone ou votre ordinateur.</span></li>
+      </ul>
+      <h3 style="margin:30px 0 0;font-family:var(--serif);font-size:20px;color:var(--pine)">Ce que vous pouvez ranger</h3>
+      <ul class="chips">
+        <li>Bulletins</li><li>Diplômes</li><li>Actes de naissance</li><li>Certificats</li><li>Attestations</li><li>Relevés de notes</li><li>Photos d'école</li><li>PDF, Word, Excel</li><li>Vidéos</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="alt">
+    <div class="wrap">
       <h2 class="sec-title">Ce que vous déposez reste privé</h2>
+      <div class="split">
       <ul class="trust">
         <li><strong>Personne ne regarde vos documents</strong><span>Notre suivi s'occupe de votre abonnement et de l'espace utilisé, jamais du contenu de vos documents.</span></li>
         <li><strong>Un espace réservé à vous</strong><span>Chaque compte est séparé des autres. Un autre client ne peut pas voir vos documents.</span></li>
@@ -190,12 +227,19 @@ footer .slogan{font-family:var(--serif);color:#fff;font-size:19px;margin-bottom:
         <li><strong>Vous gardez la main</strong><span>Vous téléchargez vos données quand vous voulez, et vous pouvez demander la fermeture de votre compte.</span></li>
         <li><strong>Hébergé en Europe</strong><span>Vos fichiers sont stockés sur des serveurs sécurisés à Londres.</span></li>
       </ul>
+      <div>
+        <div class="mini"><video class="auto" muted loop playsinline preload="none" poster="poster-coffre.jpg" aria-label="Le coffre BFC Safe se referme sur vos documents" data-src="bfc-coffre.mp4"></video></div>
+        <p class="mini-cap">Vos documents, bien rangés dans leur coffre.</p>
+      </div>
+      </div>
+      <p style="margin-top:18px"><a href="protection.html">Voir comment vos documents sont protégés</a></p>
     </div>
   </section>
 
-  <section class="alt" id="prix">
+  <section id="prix">
     <div class="wrap">
       <h2 class="sec-title">Essayez d'abord, payez ensuite</h2>
+      <div class="split">
       <div class="price">
         <p class="free">7 jours gratuits</p>
         <p class="then">Tout fonctionne pendant l'essai, avec 1 Go d'espace.</p>
@@ -206,6 +250,26 @@ footer .slogan{font-family:var(--serif);color:#fff;font-size:19px;margin-bottom:
           <li>Paiement par MTN Mobile Money ou Orange Money</li>
         </ul>
         <a class="btn brass" href="./?app=1&inscription=1">Créer mon compte gratuit</a>
+      </div>
+      <div>
+        <div class="mini"><video class="auto" muted loop playsinline preload="none" poster="poster-paiement.jpg" aria-label="Paiement confirmé, abonnement activé" data-src="bfc-paiement-1.mp4"></video></div>
+        <p class="mini-cap">Vous payez, votre abonnement est activé.</p>
+      </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="alt">
+    <div class="wrap">
+      <h2 class="sec-title">Questions fréquentes</h2>
+      <div class="faq">
+        <details><summary>Combien de personnes dans un compte ?</summary><p>Vous, plus jusqu'à 3 profils : par exemple vos enfants ou un parent. Chaque profil a son espace, et vous voyez tout depuis votre compte.</p></details>
+        <details><summary>Que se passe-t-il après les 7 jours d'essai ?</summary><p>Si vous ne payez pas, votre compte passe en lecture seule : vous voyez et téléchargez vos documents, mais vous ne pouvez plus en ajouter. Dès que vous payez, tout redevient normal.</p></details>
+        <details><summary>Comment payer ?</summary><p>Par MTN Mobile Money ou Orange Money. Depuis l'application, touchez « Augmenter mon espace », puis suivez les explications. Votre abonnement est activé à la réception du paiement.</p></details>
+        <details><summary>Puis-je l'utiliser sur ordinateur ?</summary><p>Oui. Ouvrez www.coffre-bfc.com avec Chrome ou Edge. Vous pouvez aussi l'installer comme une application, sur votre téléphone ou votre ordinateur.</p></details>
+        <details><summary>L'intelligence artificielle lit-elle mes documents ?</summary><p>Seulement si vous l'avez activée. Elle sert uniquement à proposer un titre à partir de la photo. Si vous la refusez, rien n'est envoyé.</p></details>
+        <details><summary>Dois-je garder mes originaux ?</summary><p>Oui, nous vous le recommandons toujours. BFC Safe Family est un coffre de copies numériques : gardez aussi vos papiers importants en lieu sûr.</p></details>
+        <details><summary>Puis-je récupérer ou supprimer mes données ?</summary><p>Oui, à tout moment : vous téléchargez vos données depuis l'application, et vous pouvez demander la fermeture de votre compte.</p></details>
       </div>
     </div>
   </section>
@@ -244,6 +308,21 @@ footer .slogan{font-family:var(--serif);color:#fff;font-size:19px;margin-bottom:
   var v = document.getElementById("presentation");
   v.src = VIDEO_URL;
   document.getElementById("video-sec").hidden = false;
+})();
+(function () {
+  // Petites vidéos : elles se lancent (sans son) quand on arrive dessus
+  var vs = document.querySelectorAll("video.auto");
+  if (!("IntersectionObserver" in window) || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  var io = new IntersectionObserver(function (es) {
+    es.forEach(function (e) {
+      var v = e.target;
+      if (e.isIntersecting) {
+        if (!v.src) v.src = v.getAttribute("data-src");
+        var p = v.play(); if (p && p.catch) p.catch(function () {});
+      } else { v.pause(); }
+    });
+  }, { threshold: 0.4 });
+  vs.forEach(function (v) { v.controls = false; io.observe(v); });
 })();
 </script>
 </body>
