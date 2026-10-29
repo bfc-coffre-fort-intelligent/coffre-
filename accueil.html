@@ -103,6 +103,8 @@ section{padding:56px 0}
 .split{display:grid;gap:28px;align-items:center}
 .mini{margin:0 auto;width:100%;max-width:300px;border-radius:18px;overflow:hidden;border:3px solid var(--brass);background:var(--pine-deep);box-shadow:0 18px 40px -22px rgba(18,55,42,.6)}
 .mini video{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;background:var(--pine-deep)}
+.snd{display:block;margin:12px auto 0;border:1.5px solid var(--brass);background:#fff;color:var(--pine);border-radius:999px;padding:9px 18px;font:600 15px var(--sans);cursor:pointer;min-height:44px}
+.snd[aria-pressed="true"]{background:var(--pine);color:#fff}
 .mini-cap{margin:10px auto 0;max-width:300px;text-align:center;font-size:14px;color:var(--muted)}
 @media (min-width:760px){.split{grid-template-columns:1fr 300px;gap:48px}.split .price{margin-top:0}.split .trust{margin-top:0}}
 .trust{list-style:none;margin:26px 0 0;padding:0;display:grid;gap:0;max-width:44em}
@@ -228,7 +230,8 @@ footer .slogan{font-family:var(--serif);color:#fff;font-size:19px;margin-bottom:
         <li><strong>Hébergé en Europe</strong><span>Vos fichiers sont stockés sur des serveurs sécurisés à Londres.</span></li>
       </ul>
       <div>
-        <div class="mini"><video class="auto" muted loop playsinline preload="none" poster="poster-coffre.jpg" aria-label="Le coffre BFC Safe se referme sur vos documents" data-src="bfc-coffre.mp4"></video></div>
+        <div class="mini"><video class="auto" muted loop playsinline preload="none" poster="poster-coffre.jpg" aria-label="Le coffre BFC Safe se referme sur vos documents" data-src="bfc-coffre-son.mp4"></video></div>
+        <button class="snd" type="button">🔊 Activer le son</button>
         <p class="mini-cap">Vos documents, bien rangés dans leur coffre.</p>
       </div>
       </div>
@@ -252,7 +255,8 @@ footer .slogan{font-family:var(--serif);color:#fff;font-size:19px;margin-bottom:
         <a class="btn brass" href="./?app=1&inscription=1">Créer mon compte gratuit</a>
       </div>
       <div>
-        <div class="mini"><video class="auto" muted loop playsinline preload="none" poster="poster-paiement.jpg" aria-label="Paiement confirmé, abonnement activé" data-src="bfc-paiement-1.mp4"></video></div>
+        <div class="mini"><video class="auto" muted loop playsinline preload="none" poster="poster-paiement.jpg" aria-label="Paiement confirmé, abonnement activé" data-src="bfc-paiement-son.mp4"></video></div>
+        <button class="snd" type="button">🔊 Activer le son</button>
         <p class="mini-cap">Vous payez, votre abonnement est activé.</p>
       </div>
       </div>
@@ -312,8 +316,8 @@ footer .slogan{font-family:var(--serif);color:#fff;font-size:19px;margin-bottom:
 (function () {
   // Petites vidéos : elles se lancent (sans son) quand on arrive dessus
   var vs = document.querySelectorAll("video.auto");
-  if (!("IntersectionObserver" in window) || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  var io = new IntersectionObserver(function (es) {
+  var useIO = ("IntersectionObserver" in window) && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var io = useIO ? new IntersectionObserver(function (es) {
     es.forEach(function (e) {
       var v = e.target;
       if (e.isIntersecting) {
@@ -321,8 +325,19 @@ footer .slogan{font-family:var(--serif);color:#fff;font-size:19px;margin-bottom:
         var p = v.play(); if (p && p.catch) p.catch(function () {});
       } else { v.pause(); }
     });
-  }, { threshold: 0.4 });
-  vs.forEach(function (v) { v.controls = false; io.observe(v); });
+  }, { threshold: 0.4 }) : null;
+  vs.forEach(function (v) { v.controls = false; if (io) io.observe(v); });
+  document.querySelectorAll(".snd").forEach(function (b) {
+    var v = b.parentNode.querySelector("video");
+    b.addEventListener("click", function () {
+      if (!v.src) v.src = v.getAttribute("data-src");
+      var on = v.muted;           // muted -> on active le son
+      v.muted = !on; v.volume = 1;
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      b.textContent = on ? "🔇 Couper le son" : "🔊 Activer le son";
+      if (on) { v.currentTime = 0; var p = v.play(); if (p && p.catch) p.catch(function () {}); }
+    });
+  });
 })();
 </script>
 </body>
