@@ -2452,6 +2452,88 @@ try {
       });
     }
   })();
+
+  (function () {
+    /* Premiers pas : aide le nouveau client à ranger son premier vrai document */
+    var KEY = "bfc_wl_off", box = null;
+    function isOff() { try { return localStorage.getItem(KEY) === "1"; } catch (e) { return false; } }
+    function setOff() { try { localStorage.setItem(KEY, "1"); } catch (e) {} }
+    var css = document.createElement("style");
+    css.textContent =
+      "#welcome{margin:10px 0;padding:14px 16px;border-radius:12px;border:1.5px solid #B8892F;background:#FFFCF5}" +
+      "#welcome[hidden]{display:none}" +
+      "#welcome strong{display:block;font-size:18px;color:var(--pine)}" +
+      "#welcome p{margin:6px 0 0;font-size:15px;color:var(--muted)}" +
+      "#welcome ol{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:8px}" +
+      "#welcome li{display:flex;gap:10px;align-items:flex-start;font-size:15px;line-height:1.35}" +
+      "#welcome li .dot{flex:none;width:22px;height:22px;border-radius:50%;border:2px solid #B8892F;display:grid;place-items:center;font-size:13px;font-weight:700;color:#fff;margin-top:1px}" +
+      "#welcome li.done{color:var(--muted)}" +
+      "#welcome li.done .dot{background:#2E7D4F;border-color:#2E7D4F}" +
+      "#welcome .wl-act{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}" +
+      "#welcome .wl-act .btn{min-height:44px}" +
+      "#welcome .wl-later{background:none;border:0;color:var(--muted);text-decoration:underline;font:inherit;font-size:14px;min-height:44px;cursor:pointer}";
+    document.head.appendChild(css);
+
+    function state() {
+      var d = Array.isArray(docs) ? docs : [], p = Array.isArray(profiles) ? profiles : [];
+      return [d.length > 0, p.length > 0, d.some(function (x) { return x && x.expire_le; })];
+    }
+    function openAdd() {
+      var panel = document.getElementById("upload-panel");
+      if (panel && panel.hidden) document.getElementById("toggle-add").click();
+      return panel;
+    }
+    function go(step) {
+      if (step === 0) {
+        openAdd();
+        setTimeout(function () {
+          var cam = document.getElementById("pick-cam");
+          if (cam) cam.click();
+        }, 200);
+      } else if (step === 1) {
+        var b = document.getElementById("add-profile"); if (b) b.click();
+      } else {
+        openAdd();
+        setTimeout(function () {
+          var ex = document.getElementById("expire") || document.getElementById("d-exp-in");
+          if (ex) { ex.scrollIntoView({ block: "center" }); try { ex.focus(); } catch (e) {} }
+        }, 250);
+      }
+    }
+    var LABELS = ["Ajouter mon premier document", "Créer un profil", "Ajouter un document avec une date d'expiration"];
+    var STEPS = ["Ajoutez votre premier document", "Créez un profil pour un enfant ou un proche", "Notez la date d'expiration d'un passeport ou d'une pièce d'identité"];
+    function render() {
+      if (isOff()) { if (box) { box.remove(); box = null; } return; }
+      if (!appView || appView.hidden) return;
+      if (!list.querySelector("li.doc, li.empty")) return;
+      var tools = appView.querySelector(".tools"); if (!tools) return;
+      var s = state(), next = s.indexOf(false);
+      if (next === -1) {
+        setOff();
+        if (box) { box.remove(); box = null; showToast("Bravo : votre coffre est bien démarré."); }
+        return;
+      }
+      if (!box || !document.body.contains(box)) {
+        box = document.createElement("div"); box.id = "welcome";
+        tools.parentNode.insertBefore(box, tools);
+      }
+      var key = s.join("");
+      if (box.getAttribute("data-k") === key) return;
+      box.setAttribute("data-k", key);
+      box.innerHTML = "<strong>Bienvenue dans votre coffre</strong>" +
+        "<p>Trois petits pas pour être bien protégé :</p><ol>" +
+        STEPS.map(function (t, i) { return '<li class="' + (s[i] ? "done" : "") + '"><span class="dot">' + (s[i] ? "✓" : "") + "</span><span>" + t + "</span></li>"; }).join("") +
+        '</ol><div class="wl-act"><button type="button" class="btn" id="wl-go">' + LABELS[next] + '</button><button type="button" class="wl-later" id="wl-later">Plus tard</button></div>';
+      box.querySelector("#wl-go").addEventListener("click", function () { go(next); });
+      box.querySelector("#wl-later").addEventListener("click", function () { setOff(); box.remove(); box = null; });
+    }
+    var t = null;
+    function soon() { clearTimeout(t); t = setTimeout(render, 150); }
+    new MutationObserver(soon).observe(list, { childList: true, subtree: true });
+    new MutationObserver(soon).observe(profilesBar, { childList: true, subtree: true });
+    db.auth.onAuthStateChange(function () { soon(); });
+    soon();
+  })();
 })();
 </script>
 <script>
@@ -2466,6 +2548,16 @@ try {
   } catch (e) {}
 
   var D = {
+    "Bienvenue dans votre coffre": "Welcome to your vault",
+    "Trois petits pas pour être bien protégé :": "Three small steps to be well protected:",
+    "Ajoutez votre premier document": "Add your first document",
+    "Créez un profil pour un enfant ou un proche": "Create a profile for a child or a relative",
+    "Notez la date d'expiration d'un passeport ou d'une pièce d'identité": "Note the expiry date of a passport or an ID card",
+    "Ajouter mon premier document": "Add my first document",
+    "Créer un profil": "Create a profile",
+    "Ajouter un document avec une date d'expiration": "Add a document with an expiry date",
+    "Plus tard": "Later",
+    "Bravo : votre coffre est bien démarré.": "Well done: your vault is off to a good start.",
     "Votre coffre numérique": "Your digital vault",
     "Se déconnecter": "Sign out",
     "Vos documents importants.": "Your important documents.",
