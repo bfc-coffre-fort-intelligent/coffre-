@@ -642,12 +642,78 @@ try {
   }
 
   async function makeScan(file) {
-    var img = await loadImg(file), cv = trimBands(scaled(img, MAX)), found = false, base = cv;
+    var img = await loadImg(file), cv = trimBands(scaled(img, MAX)), found = false, base = cv, q = null;
     try {
-      var q = findQuad(cv);
+      q = findQuad(cv);
       if (q) { var wp = warp(cv, q); if (wp) { base = wp; found = true; } }
     } catch (e) {}
-    return { base: base, found: found };
+    return { base: base, found: found, cv: cv, quad: q };
+  }
+
+
+  /* --- Ajuster les coins à la main --- */
+  function orderQuad(p) {
+    var cx = 0, cy = 0, i;
+    p.forEach(function (a) { cx += a[0] / 4; cy += a[1] / 4; });
+    var o = p.slice().sort(function (a, b) { return Math.atan2(a[1] - cy, a[0] - cx) - Math.atan2(b[1] - cy, b[0] - cx); });
+    var bk = 0, ba = 1e9;
+    for (i = 0; i < 4; i++) {
+      var n = o[(i + 1) % 4], ang = Math.abs(Math.atan2(n[1] - o[i][1], n[0] - o[i][0]));
+      if (ang < ba) { ba = ang; bk = i; }
+    }
+    return [o[bk], o[(bk + 1) % 4], o[(bk + 2) % 4], o[(bk + 3) % 4]];
+  }
+  function openAdjust(input) {
+    if (!cache || !cache.scan.cv) return;
+    var cv = cache.scan.cv, w0 = cv.width, h0 = cv.height;
+    var q = (cache.scan.quad || [[w0 * .08, h0 * .08], [w0 * .92, h0 * .08], [w0 * .92, h0 * .92], [w0 * .08, h0 * .92]]).map(function (p) { return p.slice(); });
+    var ov = document.createElement("div"); ov.id = "adj-ov";
+    ov.innerHTML = '<p class="adj-t">Glissez chaque point doré sur un coin de la feuille.</p><canvas id="adj-cv"></canvas>' +
+      '<p class="adj-m" id="adj-m"></p><div class="adj-b"><button type="button" id="adj-no">Annuler</button><button type="button" id="adj-ok">Valider</button></div>';
+    document.body.appendChild(ov);
+    var c = ov.querySelector("#adj-cv"), s = Math.min((window.innerWidth - 24) / w0, (window.innerHeight - 190) / h0);
+    c.width = Math.round(w0 * s); c.height = Math.round(h0 * s);
+    var ctx = c.getContext("2d"), drag = -1, off = [0, 0];
+    function draw() {
+      ctx.drawImage(cv, 0, 0, c.width, c.height);
+      ctx.beginPath();
+      q.forEach(function (p, i) { if (i) ctx.lineTo(p[0] * s, p[1] * s); else ctx.moveTo(p[0] * s, p[1] * s); });
+      ctx.closePath(); ctx.fillStyle = "rgba(201,162,39,.15)"; ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = "#C9A227"; ctx.stroke();
+      q.forEach(function (p) {
+        ctx.beginPath(); ctx.arc(p[0] * s, p[1] * s, 15, 0, 6.2832);
+        ctx.fillStyle = "#C9A227"; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = "#fff"; ctx.stroke();
+      });
+    }
+    function pos(e) { var r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+    c.addEventListener("pointerdown", function (e) {
+      var p = pos(e), best = -1, bd = 90;
+      q.forEach(function (pt, i) { var dd = Math.hypot(pt[0] * s - p[0], pt[1] * s - p[1]); if (dd < bd) { bd = dd; best = i; } });
+      if (best < 0) return;
+      drag = best; off = [q[best][0] * s - p[0], q[best][1] * s - p[1]];
+      try { c.setPointerCapture(e.pointerId); } catch (x) {}
+      e.preventDefault();
+    });
+    c.addEventListener("pointermove", function (e) {
+      if (drag < 0) return;
+      var p = pos(e), x = (p[0] + off[0]) / s, y = (p[1] + off[1]) / s;
+      q[drag] = [Math.max(0, Math.min(w0, x)), Math.max(0, Math.min(h0, y))];
+      draw(); e.preventDefault();
+    });
+    function up() { drag = -1; }
+    c.addEventListener("pointerup", up); c.addEventListener("pointercancel", up);
+    function close() { if (ov.parentNode) ov.parentNode.removeChild(ov); }
+    ov.querySelector("#adj-no").onclick = close;
+    ov.querySelector("#adj-ok").onclick = function () {
+      var m = document.getElementById("adj-m"), o = orderQuad(q), wp = o && warp(cv, o);
+      if (!wp) { m.textContent = "Les points ne forment pas une feuille. Replacez-les sur les 4 coins."; return; }
+      cache.scan = { base: wp, found: true, cv: cv, quad: q }; cache.files = {};
+      close();
+      choose(input, "scan").then(function () {
+        document.getElementById("scan-hint").textContent = "Coins ajustés. Choisissez la version que vous préférez.";
+      });
+    };
+    draw();
   }
 
   /* --- Interface : aperçu + 3 choix --- */
@@ -659,7 +725,15 @@ try {
     "#scan-box .seg{display:flex;gap:6px}" +
     "#scan-box .seg button{flex:1;min-height:44px;border:1.5px solid var(--line);background:#fff;color:var(--pine);border-radius:10px;font:inherit;font-weight:600;font-size:14px;cursor:pointer}" +
     "#scan-box .seg button[aria-pressed=true]{background:var(--pine);color:#fff;border-color:var(--pine)}" +
-    "#scan-box .hint{margin:8px 0 0}";
+    "#scan-box .hint{margin:8px 0 0}" +
+    "#scan-box .adj{display:block;width:100%;margin-top:8px;min-height:44px;border:1.5px dashed var(--pine);background:#fff;color:var(--pine);border-radius:10px;font:inherit;font-weight:600;font-size:14px;cursor:pointer}" +
+    "#adj-ov{position:fixed;inset:0;z-index:99999;background:#0F2A22;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px;gap:8px}" +
+    "#adj-ov .adj-t{color:#fff;margin:0;font-weight:600;text-align:center}" +
+    "#adj-ov .adj-m{color:#F3D77A;margin:0;min-height:18px;text-align:center;font-size:14px}" +
+    "#adj-cv{touch-action:none;border-radius:8px;max-width:100%}" +
+    "#adj-ov .adj-b{display:flex;gap:10px;width:100%;max-width:420px}" +
+    "#adj-ov .adj-b button{flex:1;min-height:48px;border-radius:10px;border:0;font:inherit;font-weight:700;font-size:16px;cursor:pointer;background:#fff;color:#0F2A22}" +
+    "#adj-ov .adj-b #adj-ok{background:#C9A227;color:#0F2A22}";
   document.head.appendChild(css);
 
   function ensureBox(input) {
@@ -671,6 +745,7 @@ try {
       '<button type="button" data-m="orig" aria-pressed="false">Original</button>' +
       '<button type="button" data-m="scan" aria-pressed="true">Scan</button>' +
       '<button type="button" data-m="bw" aria-pressed="false">Noir et blanc</button></div>' +
+      '<button type="button" class="adj" id="scan-adj">✂ Ajuster les coins</button>' +
       '<p class="hint" id="scan-hint"></p>';
     var anchor = document.getElementById("pick-info") || input;
     var host = anchor.parentNode;
@@ -679,6 +754,7 @@ try {
       var b = e.target.closest("button[data-m]"); if (!b) return;
       choose(input, b.getAttribute("data-m"));
     });
+    box.querySelector("#scan-adj").addEventListener("click", function () { openAdjust(input); });
     return box;
   }
   function setPreview(file) {
@@ -735,8 +811,8 @@ try {
       Array.prototype.forEach.call(box.querySelectorAll("button[data-m]"), function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-m") === "scan")); });
       setPreview(cache.files.scan);
       document.getElementById("scan-hint").textContent = scan.found
-        ? "Le document a été recadré et éclairci. Choisissez la version que vous préférez."
-        : "Document non détecté : la photo a seulement été éclaircie. Vous pouvez garder l'original.";
+        ? "Le document a été recadré et éclairci. Si le cadre n'est pas bon, touchez « Ajuster les coins »."
+        : "Document non détecté. Touchez « Ajuster les coins » pour placer les 4 coins vous-même.";
       useFile(input, cache.files.scan);
       go();
     }).catch(function () {
