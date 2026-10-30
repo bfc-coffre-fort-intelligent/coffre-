@@ -83,7 +83,7 @@ section{padding:56px 0}
 .steps .n{width:48px;height:48px;border-radius:50%;border:2px solid var(--brass);color:var(--brass);display:grid;place-items:center;font-family:var(--serif);font-weight:700;font-size:22px}
 .steps h3{font-size:22px}
 .steps p{color:var(--muted);margin-top:4px}
-@media (min-width:760px){.steps{grid-template-columns:repeat(3,1fr);gap:32px}.steps li{grid-template-columns:1fr;gap:12px}}
+@media (min-width:760px){.steps{grid-template-columns:repeat(4,1fr);gap:28px}.steps li{grid-template-columns:1fr;gap:12px}}
 
 /* confiance */
 .chips{list-style:none;margin:22px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:10px}
@@ -136,6 +136,28 @@ footer{background:var(--pine-deep);color:#B9CCC3;padding:34px 0 40px;font-size:1
 footer .links{display:flex;flex-wrap:wrap;gap:8px 22px;margin-bottom:14px}
 footer a{color:#fff}
 footer .slogan{font-family:var(--serif);color:#fff;font-size:19px;margin-bottom:14px}
+
+/* accroche et problèmes */
+.eyebrow{font-family:var(--sans);font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--brass-light);margin:0 0 14px;max-width:30em}
+.pains{padding:56px 0 48px}
+.pain-grid{display:grid;gap:16px;margin-top:26px}
+.pain{background:#fff;border:1px solid var(--line);border-top:5px solid var(--brass);border-radius:14px;padding:20px 20px 22px;box-shadow:0 14px 30px -24px rgba(18,55,42,.55)}
+.pain .kick{font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--brass)}
+.pain h3{margin:8px 0 10px;font-size:22px}
+.pain p:last-child{color:var(--muted)}
+@media (min-width:760px){.pain-grid{grid-template-columns:repeat(3,1fr);gap:22px}}
+.turn{background:var(--pine);color:#fff;padding:60px 0}
+.turn .imagine{font-size:15px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--brass-light)}
+.turn .scene{margin-top:14px;font-family:var(--serif);font-weight:700;font-size:clamp(26px,6vw,42px);line-height:1.25;color:#fff;max-width:22em}
+.turn .after{margin-top:20px;color:#DDE8E2;max-width:34em}
+.turn .btn{margin-top:26px}
+.turn .note{margin-top:12px;font-size:16px;color:#B9CCC3}
+#sticky-cta{position:fixed;left:0;right:0;bottom:0;z-index:50;padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:rgba(12,42,32,.97);display:none}
+#sticky-cta .btn{display:flex;width:100%}
+/* sous-titre de la marque */
+.brand .tag{display:block;font:400 12px/1.2 var(--sans);opacity:.8;margin-top:2px}
+@media (max-width:759px){#sticky-cta.on{display:block}footer{padding-bottom:96px}}
+@media (max-width:480px){.top .wrap{gap:8px}.brand{font-size:18px;white-space:nowrap}.brand svg{display:none}.btn.small{padding:0 12px;font-size:15px}}
 </style>
 </head>
 <body>
@@ -144,7 +166,7 @@ footer .slogan{font-family:var(--serif);color:#fff;font-size:19px;margin-bottom:
   <div class="wrap">
     <a class="brand" href="accueil.html" aria-label="BFC Safe Family, accueil">
       <svg viewBox="0 0 200 200" aria-hidden="true"><circle cx="100" cy="100" r="92" fill="none" stroke="#B8892F" stroke-width="10"/><rect x="62" y="96" width="76" height="58" rx="10" fill="none" stroke="#B8892F" stroke-width="12"/><path d="M78 96V76a22 22 0 0 1 44 0v20" fill="none" stroke="#B8892F" stroke-width="12" stroke-linecap="round"/></svg>
-      BFC Safe Family
+      <span>BFC Safe Family<small class="tag">Votre coffre numérique</small></span>
     </a>
     <div class="bar-r">
       <span id="lang-sw" role="group" aria-label="Langue / Language"><button type="button" data-l="fr" aria-pressed="true">FR</button><button type="button" data-l="en" aria-pressed="false">EN</button></span>
@@ -167,16 +189,50 @@ footer .slogan{font-family:var(--serif);color:#fff;font-size:19px;margin-bottom:
         </svg>
       </div>
       <div>
-        <h1>Vos documents importants. Protégés aujourd'hui, accessibles demain.</h1>
-        <p class="lead">BFC Safe Family est le coffre numérique de votre famille. Vous photographiez un document : il est rangé, protégé, et retrouvé en quelques secondes.</p>
+        <p class="eyebrow">Vos documents importants. Protégés aujourd'hui, accessibles demain.</p>
+        <h1>Où sont les documents importants de votre famille ?</h1>
+        <p class="lead">Le bulletin dans un cahier, le diplôme dans une valise, l'acte de naissance au village. BFC Safe Family, le coffre numérique de votre famille, met tous vos papiers au même endroit : protégés, et retrouvés en quelques secondes.</p>
         <div class="actions">
-          <a class="btn brass" href="./?app=1&inscription=1">Essayer gratuitement 7 jours</a>
+          <a class="btn brass" href="./?app=1&inscription=1">Créer mon coffre gratuit</a>
           <a class="btn line" href="./?app=1">J'ai déjà un compte</a>
         </div>
-        <p class="note">Aucun paiement pour l'essai.</p>
+        <p class="note">7 jours gratuits. Aucun paiement pour l'essai.</p>
       </div>
     </div>
   </div>
+
+  <section class="pains" id="problemes">
+    <div class="wrap">
+      <h2 class="sec-title">Ça vous est déjà arrivé ?</h2>
+      <div class="pain-grid">
+        <article class="pain">
+          <p class="kick">Perdre</p>
+          <h3>Le téléphone disparaît au marché.</h3>
+          <p>Avec lui, la photo de votre pièce d'identité, de vos diplômes, des bulletins des enfants. Il faut tout refaire : du temps et des déplacements.</p>
+        </article>
+        <article class="pain">
+          <p class="kick">Oublier</p>
+          <h3>« Votre passeport expire dans quatre mois. »</h3>
+          <p>À l'agence de voyage, c'est trop tard pour ce voyage. Personne ne vous avait prévenu. Une date oubliée, et tout s'arrête.</p>
+        </article>
+        <article class="pain">
+          <p class="kick">Éparpiller</p>
+          <h3>Un bulletin dans un cahier, un diplôme dans une valise.</h3>
+          <p>L'acte de naissance est au village. Le soir où l'école ou le concours le demande, vous cherchez partout.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="turn">
+    <div class="wrap">
+      <p class="imagine">Maintenant, imaginez.</p>
+      <p class="scene">Il est 21 h. Le dossier ferme demain matin. Vous ouvrez BFC Safe Family, vous tapez « acte ». Le document s'ouvre. Dix secondes.</p>
+      <p class="after">C'est cela, BFC Safe Family : tous les papiers de votre famille au même endroit, protégés, avec un rappel avant chaque date d'expiration.</p>
+      <a class="btn brass" href="./?app=1&inscription=1">Créer mon coffre gratuit</a>
+      <p class="note">7 jours gratuits. Aucun paiement pour l'essai.</p>
+    </div>
+  </section>
 
   <!-- Vidéo : renseignez VIDEO_URL plus bas (ex. "presentation.mp4") pour l'afficher -->
   <section id="video-sec" class="alt" hidden>
@@ -188,13 +244,6 @@ footer .slogan{font-family:var(--serif);color:#fff;font-size:19px;margin-bottom:
     </div>
   </section>
 
-  <section class="problem">
-    <div class="wrap">
-      <p class="big">Le bulletin est dans un tiroir. L'acte de naissance, dans une valise. Le diplôme, dans un téléphone perdu.</p>
-      <p class="after">Ces papiers sont des années de travail et des preuves de ce que nous sommes. Pourtant, on les garde un peu au hasard, jusqu'au jour où on en a besoin.</p>
-    </div>
-  </section>
-
   <section class="alt">
     <div class="wrap">
       <h2 class="sec-title">Un coffre simple pour toute la famille</h2>
@@ -202,6 +251,7 @@ footer .slogan{font-family:var(--serif);color:#fff;font-size:19px;margin-bottom:
         <li><span class="n" aria-hidden="true">1</span><div><h3>Photographiez</h3><p>Prenez le document en photo, ou choisissez un fichier : PDF, Word, Excel ou vidéo.</p></div></li>
         <li><span class="n" aria-hidden="true">2</span><div><h3>Rangez par personne</h3><p>Chaque membre de la famille a son espace. Vous voyez tout, chacun garde ses papiers à sa place.</p></div></li>
         <li><span class="n" aria-hidden="true">3</span><div><h3>Retrouvez en un instant</h3><p>Tapez un mot, une année, un établissement. Le document s'ouvre depuis votre téléphone.</p></div></li>
+        <li><span class="n" aria-hidden="true">4</span><div><h3>Soyez prévenu à temps</h3><p>Notez la date d'un passeport ou d'une pièce d'identité : l'application vous le rappelle avant l'expiration.</p></div></li>
       </ol>
     </div>
   </section>
@@ -308,6 +358,20 @@ footer .slogan{font-family:var(--serif);color:#fff;font-size:19px;margin-bottom:
     <p>© 2026 BFC Consulting. Tous droits réservés. BFC Safe Family, le logo et les textes de ce site ne peuvent être copiés ni réutilisés sans autorisation.</p>
   </div>
 </footer>
+<div id="sticky-cta"><a class="btn brass" href="./?app=1&inscription=1">Créer mon coffre gratuit</a></div>
+<script>
+(function () {
+  var bar = document.getElementById("sticky-cta");
+  if (!bar || !("IntersectionObserver" in window)) return;
+  var seen = { hero: true, turn: false, prix: false, foot: false };
+  function upd() { bar.classList.toggle("on", !seen.hero && !seen.turn && !seen.prix && !seen.foot); }
+  [["hero", ".hero .actions"], ["turn", ".turn .btn"], ["prix", "#prix"], ["foot", "footer"]].forEach(function (p) {
+    var el = document.querySelector(p[1]); if (!el) return;
+    new IntersectionObserver(function (es) { seen[p[0]] = es[0].isIntersecting; upd(); }, { threshold: 0.05 }).observe(el);
+  });
+})();
+</script>
+
 
 <script>
 (function () {
@@ -356,6 +420,24 @@ footer .slogan{font-family:var(--serif);color:#fff;font-size:19px;margin-bottom:
     else if (/^en/i.test(navigator.language || "")) lang = "en";
   } catch (e) {}
   var D = {
+    "Où sont les documents importants de votre famille ?": "Where are your family's important documents?",
+    "Le bulletin dans un cahier, le diplôme dans une valise, l'acte de naissance au village. BFC Safe Family, le coffre numérique de votre famille, met tous vos papiers au même endroit : protégés, et retrouvés en quelques secondes.": "The report card in a notebook, the diploma in a suitcase, the birth certificate in the village. BFC Safe Family, your family's digital vault, puts all your papers in one place: protected, and found again in seconds.",
+    "Votre coffre numérique": "Your digital vault",
+    "Créer mon coffre gratuit": "Create my free vault",
+    "7 jours gratuits. Aucun paiement pour l'essai.": "7 free days. No payment for the trial.",
+    "Ça vous est déjà arrivé ?": "Has this ever happened to you?",
+    "Perdre": "Losing", "Oublier": "Forgetting", "Éparpiller": "Scattering",
+    "Le téléphone disparaît au marché.": "The phone vanishes at the market.",
+    "Avec lui, la photo de votre pièce d'identité, de vos diplômes, des bulletins des enfants. Il faut tout refaire : du temps et des déplacements.": "With it go the photo of your ID, your diplomas, your children's report cards. Everything has to be redone: time and trips.",
+    "« Votre passeport expire dans quatre mois. »": "“Your passport expires in four months.”",
+    "À l'agence de voyage, c'est trop tard pour ce voyage. Personne ne vous avait prévenu. Une date oubliée, et tout s'arrête.": "At the travel agency, it's too late for this trip. Nobody had warned you. One forgotten date, and everything stops.",
+    "Un bulletin dans un cahier, un diplôme dans une valise.": "A report card in a notebook, a diploma in a suitcase.",
+    "L'acte de naissance est au village. Le soir où l'école ou le concours le demande, vous cherchez partout.": "The birth certificate is in the village. The evening the school or the exam asks for it, you search everywhere.",
+    "Maintenant, imaginez.": "Now, imagine.",
+    "Il est 21 h. Le dossier ferme demain matin. Vous ouvrez BFC Safe Family, vous tapez « acte ». Le document s'ouvre. Dix secondes.": "It's 9 pm. The application closes tomorrow morning. You open BFC Safe Family, you type “birth”. The document opens. Ten seconds.",
+    "C'est cela, BFC Safe Family : tous les papiers de votre famille au même endroit, protégés, avec un rappel avant chaque date d'expiration.": "That is BFC Safe Family: all your family's papers in one place, protected, with a reminder before each expiry date.",
+    "Soyez prévenu à temps": "Be warned in time",
+    "Notez la date d'un passeport ou d'une pièce d'identité : l'application vous le rappelle avant l'expiration.": "Note the date of a passport or an ID card: the app reminds you before it expires.",
     "Se connecter": "Sign in",
     "Vos documents importants. Protégés aujourd'hui, accessibles demain.": "Your important documents. Protected today, accessible tomorrow.",
     "BFC Safe Family est le coffre numérique de votre famille. Vous photographiez un document : il est rangé, protégé, et retrouvé en quelques secondes.": "BFC Safe Family is your family's digital vault. You photograph a document: it is filed, protected, and found again in seconds.",
