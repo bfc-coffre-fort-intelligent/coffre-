@@ -110,7 +110,10 @@ input[type=file]{height:auto;padding:10px 12px}
       </svg>
       <span>BFC Safe Family<small style="display:block;font:400 12px/1.2 system-ui,sans-serif;opacity:.8;margin-top:2px">Votre coffre numérique</small></span>
     </div>
-    <button id="sign-out" class="btn small on-dark" type="button" hidden>Se déconnecter</button>
+    <div class="bar-r">
+      <span id="lang-sw" role="group" aria-label="Langue / Language"><button type="button" data-l="fr" aria-pressed="true">FR</button><button type="button" data-l="en" aria-pressed="false">EN</button></span>
+      <button id="sign-out" class="btn small on-dark" type="button" hidden>Se déconnecter</button>
+    </div>
   </div>
 </header>
 
@@ -2450,5 +2453,325 @@ try {
   })();
 })();
 </script>
+<script>
+(function () {
+  /* Langue de l'application : Français / English. Les textes de l'application sont traduits à l'affichage. */
+  var KEY = "bfc_lang", lang = "fr";
+  try {
+    var q = (location.search.match(/[?&]lang=(fr|en)/) || [])[1];
+    var saved = localStorage.getItem(KEY);
+    if (q) lang = q; else if (saved === "fr" || saved === "en") lang = saved;
+    else if (/^en/i.test(navigator.language || "")) lang = "en";
+  } catch (e) {}
+
+  var D = {
+    "Votre coffre numérique": "Your digital vault",
+    "Se déconnecter": "Sign out",
+    "Vos documents importants.": "Your important documents.",
+    "Protégés aujourd'hui, accessibles demain.": "Protected today, accessible tomorrow.",
+    "Bulletins, certificats, photos de classe : rangés, protégés et retrouvés en quelques secondes.": "Report cards, certificates, class photos: stored, protected and found in seconds.",
+    "Connexion": "Sign in", "Créer un compte": "Create an account",
+    "Adresse e-mail": "Email address", "Mot de passe": "Password",
+    "8 caractères minimum.": "At least 8 characters.",
+    "Se connecter": "Sign in", "Créer mon compte": "Create my account",
+    "Mot de passe oublié ?": "Forgot password?",
+    "Mes documents": "My documents", "Ajouter un document": "Add a document",
+    "Titre du document": "Document title", "Type": "Type", "Année": "Year",
+    "Établissement": "School / institution",
+    "Date d'expiration (facultatif)": "Expiry date (optional)",
+    "Passeport, carte d'identité, permis… nous vous le rappelons avant la date.": "Passport, ID card, licence… we remind you before the date.",
+    "Fichier": "File",
+    "Photo, PDF, Word, Excel ou vidéo. 50 Mo maximum.": "Photo, PDF, Word, Excel or video. 50 MB maximum.",
+    "Enregistrer dans le coffre": "Save to the vault",
+    "Bulletin": "Report card", "Certificat": "Certificate",
+    "Attestation de réussite": "Certificate of achievement", "Diplôme": "Diploma",
+    "Pièce d'identité": "ID document", "Passeport": "Passport",
+    "Permis de conduire": "Driving licence", "Photo d'école": "School photo",
+    "Vidéo": "Video", "Autre": "Other",
+    "Rechercher": "Search",
+    "Titre, type, année, établissement": "Title, type, year, school",
+    "Ajouter un profil": "Add a profile", "+ Ajouter un profil": "+ Add a profile",
+    "Prénom de l'enfant, ou nom du profil": "Child's first name, or profile name",
+    "Annuler": "Cancel", "Ajouter": "Add", "Fermer": "Close", "Enregistrer": "Save", "Valider": "Confirm",
+    "Moi-même": "Myself", "Modifier les noms": "Edit names",
+    "Votre nom (remplace « Moi-même »)": "Your name (replaces “Myself”)",
+    "Prendre une photo": "Take a photo", "Choisir un fichier": "Choose a file",
+    "Plus de détails (type, année, établissement)": "More details (type, year, school)",
+    "Réessayer": "Try again",
+    "Titre automatique par IA": "Automatic title by AI",
+    "Une copie de la photo est envoyée à une IA pour proposer le titre.": "A copy of the photo is sent to an AI to suggest the title.",
+    "Titre (facultatif)": "Title (optional)",
+    "Laissez vide : proposé par l'IA": "Leave empty: suggested by the AI",
+    "Laissez vide : « Document du » + la date": "Leave empty: “Document of” + the date",
+    "Noir et blanc": "Black and white",
+    "✂ Ajuster les coins": "✂ Adjust the corners",
+    "Aperçu du document": "Document preview", "Version du document": "Document version",
+    "Préparation du scan…": "Preparing the scan…",
+    "Glissez chaque point doré sur un coin de la feuille.": "Drag each gold dot onto a corner of the sheet.",
+    "Les points ne forment pas une feuille.": "The points don't form a sheet.",
+    "Replacez-les sur les 4 coins.": "Move them onto the 4 corners.",
+    "Coins ajustés.": "Corners adjusted.",
+    "Choisissez la version que vous préférez.": "Choose the version you prefer.",
+    "Le document a été recadré et éclairci.": "The document was cropped and brightened.",
+    "Si le cadre n'est pas bon, touchez « Ajuster les coins ».": "If the frame is wrong, tap “Adjust the corners”.",
+    "Document non détecté.": "Document not detected.",
+    "Touchez « Ajuster les coins » pour placer les 4 coins vous-même.": "Tap “Adjust the corners” to place the 4 corners yourself.",
+    "Document non détecté : la photo a seulement été éclaircie.": "Document not detected: the photo was only brightened.",
+    "Vous pouvez garder l'original.": "You can keep the original.",
+    /* messages */
+    "Adresse e-mail ou mot de passe incorrect.": "Incorrect email address or password.",
+    "Adresse e-mail non confirmée.": "Email address not confirmed.",
+    "Ouvrez le message de confirmation reçu par e-mail.": "Open the confirmation message you received by email.",
+    "Trop de tentatives.": "Too many attempts.",
+    "Patientez quelques minutes puis réessayez.": "Wait a few minutes, then try again.",
+    "Un compte existe déjà avec cette adresse.": "An account already exists with this address.",
+    "Utilisez l'onglet Connexion.": "Use the Sign in tab.",
+    "Connexion impossible.": "Unable to connect.",
+    "Vérifiez votre connexion internet.": "Check your internet connection.",
+    "Accès refusé.": "Access denied.",
+    "Reconnectez-vous puis réessayez.": "Sign in again, then try again.",
+    "Saisissez votre adresse e-mail et votre mot de passe.": "Enter your email address and password.",
+    "Le mot de passe doit contenir au moins 8 caractères.": "The password must be at least 8 characters long.",
+    "Compte créé.": "Account created.",
+    "Ouvrez le message de confirmation envoyé à votre adresse e-mail, puis revenez vous connecter.": "Open the confirmation message sent to your email address, then come back and sign in.",
+    "Saisissez d'abord votre adresse e-mail ci-dessus.": "First enter your email address above.",
+    "Un e-mail vient d'être envoyé.": "An email has just been sent.",
+    "Ouvrez-le pour choisir un nouveau mot de passe.": "Open it to choose a new password.",
+    "Pour créer un compte, cochez la case d'acceptation des conditions et de la politique de confidentialité.": "To create an account, tick the box accepting the terms and the privacy policy.",
+    "Nouveau mot de passe": "New password",
+    "Choisissez un mot de passe d'au moins 8 caractères.": "Choose a password of at least 8 characters.",
+    "Confirmez le mot de passe": "Confirm the password",
+    "Les deux mots de passe ne sont pas identiques.": "The two passwords don't match.",
+    "Mot de passe modifié.": "Password changed.",
+    "Choisissez d'abord une photo ou un fichier.": "First choose a photo or a file.",
+    "Choisissez un fichier à ajouter.": "Choose a file to add.",
+    "Ce fichier dépasse 50 Mo.": "This file exceeds 50 MB.",
+    "Choisissez un fichier plus léger.": "Choose a smaller file.",
+    "Ce fichier ne peut pas être lu par le navigateur (cela arrive avec les fichiers pris directement dans WhatsApp).": "This file cannot be read by the browser (this happens with files taken directly from WhatsApp).",
+    "Enregistrez-le d'abord dans la galerie du téléphone, puis ajoutez-le depuis la galerie.": "First save it in the phone's gallery, then add it from the gallery.",
+    "Envoi en cours…": "Sending…", "Préparation…": "Preparing…", "Enregistrement…": "Saving…",
+    "Document ajouté au coffre.": "Document added to the vault.",
+    "Votre session a expiré.": "Your session has expired.",
+    "Reconnectez-vous, puis réessayez.": "Sign in again, then try again.",
+    "Votre document est conservé : appuyez sur « Réessayer ».": "Your document is kept: tap “Try again”.",
+    "Analyse du document par l'IA…": "The AI is analysing the document…",
+    "Suggestions ajoutées par l'IA.": "Suggestions added by the AI.",
+    "Vérifiez avant d'enregistrer.": "Check before saving.",
+    "Impossible d'ouvrir ce document.": "Unable to open this document.",
+    "Date non enregistrée.": "Date not saved.", "Réessayez dans un instant.": "Try again in a moment.",
+    "Date d'expiration enregistrée.": "Expiry date saved.", "Date d'expiration retirée.": "Expiry date removed.",
+    "Enregistrer la date": "Save the date",
+    "Modification refusée.": "Change refused.",
+    "Réessayez, ou contactez-nous si cela continue.": "Try again, or contact us if this continues.",
+    "Noms enregistrés.": "Names saved.", "Donnez un nom à ce profil.": "Give this profile a name.",
+    "Enregistrement impossible.": "Unable to save.", "Réessayez.": "Try again.",
+    "Fichier « Mes données » téléchargé.": "“My data” file downloaded.",
+    "réessayez": "try again",
+    "Ce coffre est vide.": "This vault is empty.",
+    "Ajoutez un premier document pour ce profil.": "Add a first document for this profile.",
+    "Aucun résultat.": "No results.", "Essayez un autre mot, ou une autre année.": "Try another word, or another year.",
+    "Ouvrir": "Open", "Supprimer": "Delete", "Supprimer ce document": "Delete this document",
+    "Document supprimé.": "Document deleted.",
+    "⏰ À renouveler bientôt": "⏰ To renew soon",
+    /* abonnement et espace */
+    "Payer mon abonnement": "Pay my subscription",
+    "Dernier jour de votre essai gratuit.": "Last day of your free trial.",
+    "Ensuite, le compte passe en lecture seule tant que l'abonnement n'est pas payé.": "After that, the account becomes read-only until the subscription is paid.",
+    "Votre essai est terminé.": "Your trial has ended.",
+    "Vous pouvez voir et télécharger vos documents, mais plus en ajouter.": "You can view and download your documents, but not add more.",
+    "Payez votre abonnement pour tout réactiver.": "Pay your subscription to reactivate everything.",
+    "Votre abonnement a expiré.": "Your subscription has expired.",
+    "Votre abonnement est arrivé à échéance.": "Your subscription has reached its due date.",
+    "Votre compte est en lecture seule.": "Your account is read-only.",
+    "Vous pouvez voir et télécharger vos documents.": "You can view and download your documents.",
+    "Votre coffre est plein.": "Your vault is full.", "Votre coffre est presque plein.": "Your vault is almost full.",
+    "Augmenter mon espace": "Increase my space",
+    "Espace en plus": "Extra space",
+    "Aucun : compte de base (3 Go)": "None: base account (3 GB)",
+    "À payer par trimestre": "To pay per quarter",
+    "Compte de base : 3 Go": "Base account: 3 GB",
+    "1. Envoyez ce montant à l'un de ces deux numéros :": "1. Send this amount to one of these two numbers:",
+    "Copier": "Copy",
+    "Appuyez sur « J'ai payé » : WhatsApp s'ouvre avec votre message déjà écrit.": "Tap “I've paid”: WhatsApp opens with your message already written.",
+    "Votre espace est activé dès que nous avons vérifié le paiement.": "Your space is activated as soon as we have verified the payment.",
+    "J'ai payé": "I've paid",
+    /* pied de page */
+    "Conditions d'utilisation": "Terms of use", "Politique de confidentialité": "Privacy policy",
+    "Demander la fermeture de mon compte": "Request to close my account",
+    "Télécharger mes données": "Download my data",
+    "Fermer mon compte ?": "Close my account?",
+    "Votre demande sera enregistrée avec sa date.": "Your request will be recorded with its date.",
+    "Nous vous écrirons pour vérifier que c'est bien vous.": "We will write to you to check that it is really you.",
+    "Vous aurez ensuite 48 heures pour changer d'avis, puis votre compte et vos documents seront supprimés sous 2 semaines.": "You will then have 48 hours to change your mind, after which your account and documents will be deleted within 2 weeks.",
+    "La suppression est définitive.": "Deletion is permanent.",
+    "Téléchargez vos documents importants avant.": "Download your important documents first.",
+    "Envoyer la demande": "Send the request",
+    "Une demande de fermeture est déjà en cours pour votre compte.": "A closure request is already in progress for your account.",
+    "Nous vous écrirons.": "We will write to you.",
+    "Nous vous écrivons à l'adresse de votre compte pour la confirmer.": "We will write to the address of your account to confirm it.",
+    /* consentements */
+    "J'accepte les": "I accept the", "et la": "and the",
+    "conditions d'utilisation": "terms of use", "politique de confidentialité": "privacy policy",
+    "(obligatoire)": "(required)", "(facultatif)": "(optional)",
+    "Oui, proposer automatiquement un titre pour mes documents.": "Yes, automatically suggest a title for my documents.",
+    "Une copie du document est envoyée à une intelligence artificielle (Anthropic), uniquement pour cela.": "A copy of the document is sent to an artificial intelligence (Anthropic), only for this purpose.",
+    "Vous pouvez changer d'avis à tout moment.": "You can change your mind at any time.",
+    "Avant de continuer": "Before you continue",
+    "Pour utiliser BFC Safe Family, merci de lire et d'accepter nos règles.": "To use BFC Safe Family, please read and accept our rules.",
+    "Continuer": "Continue"
+  };
+
+  function norm(s) { return String(s).replace(/[  ]/g, " ").replace(/[’]/g, "'").replace(/\s+/g, " ").trim(); }
+  function nf(x, f) { return f(x); }
+  var P = [
+    [/^Sélectionné : (.*)$/, function (m) { return "Selected: " + m[1]; }],
+    [/^Espace utilisé : (.*) sur (.*)$/, function (m) { return "Space used: " + m[1] + " of " + m[2].replace("(essai)", "(trial)"); }],
+    [/^(\d+) documents? au total$/, function (m) { return m[1] + (m[1] === "1" ? " document" : " documents") + " in total"; }],
+    [/^Supprimer « (.*) » définitivement \?$/, function (m) { return "Delete “" + m[1] + "” permanently?"; }],
+    [/^Profil « (.*) » ajouté\.$/, function (m) { return "Profile “" + m[1] + "” added."; }],
+    [/^Profil (\d+)$/, function (m) { return "Profile " + m[1]; }],
+    [/^Expiré depuis (\d+) jours?$/i, function (m) { return "Expired " + m[1] + (m[1] === "1" ? " day ago" : " days ago"); }],
+    [/^Expire aujourd'hui$/i, function () { return "Expires today"; }],
+    [/^Expire dans (\d+) jours?$/i, function (m) { return "Expires in " + m[1] + (m[1] === "1" ? " day" : " days"); }],
+    [/^Expire le (.*)$/i, function (m) { return "Expires on " + m[1]; }],
+    [/^et (\d+) autre\(s\)$/, function (m) { return "and " + m[1] + " more"; }],
+    [/^Essai gratuit : il vous reste (\d+) jours? \(jusqu'au (.*)\)\.$/, function (m) { return "Free trial: " + m[1] + (m[1] === "1" ? " day" : " days") + " left (until " + m[2] + ")."; }],
+    [/^Il vous reste (\d+) jours? pour payer avant le passage en lecture seule\.$/, function (m) { return "You have " + m[1] + (m[1] === "1" ? " day" : " days") + " left to pay before the account becomes read-only."; }],
+    [/^Votre abonnement se termine le (.*)\.$/, function (m) { return "Your subscription ends on " + m[1] + "."; }],
+    [/^Compte de base 2 700 FCFA \(−10 %\) \+ (\d+) Go × 300 FCFA$/, function (m) { return "Base account 2 700 FCFA (−10%) + " + m[1] + " GB × 300 FCFA"; }],
+    [/^\+ (\d+) Go \((\d+) Go au total\)$/, function (m) { return "+ " + m[1] + " GB (" + m[2] + " GB in total)"; }],
+    [/^Numéro copié : (.*)$/, function (m) { return "Number copied: " + m[1]; }],
+    [/^Numéro : (.*)$/, function (m) { return "Number: " + m[1]; }],
+    [/^Espace insuffisant : votre coffre est limité à (.*)\.$/, function (m) { return "Not enough space: your vault is limited to " + m[1].replace("(essai)", "(trial)") + "."; }],
+    [/^Connexion instable… nouvelle tentative \((.*)\)$/, function (m) { return "Unstable connection… new attempt (" + m[1] + ")"; }],
+    [/^Demande enregistrée le (\d[\d\/]*)\.?$/, function (m) { return "Request recorded on " + m[1] + "."; }],
+    [/^Demande impossible pour le moment : (.*)$/, function (m) { return "Request not possible right now: " + trs(m[1]); }],
+    [/^Vous pouvez aussi écrire à (.*)\.$/, function (m) { return "You can also write to " + m[1] + "."; }],
+    [/^Une erreur est survenue : (.*)$/, function (m) { return "An error occurred: " + m[1]; }],
+    [/^Nous contacter sur WhatsApp : (.*)$/, function (m) { return "Contact us on WhatsApp: " + m[1]; }],
+    [/^Téléchargement impossible : (.*)$/, function (m) { return "Download failed: " + trs(m[1]); }]
+  ];
+  function tr1(s) {
+    if (Object.prototype.hasOwnProperty.call(D, s)) return D[s];
+    for (var i = 0; i < P.length; i++) { var m = s.match(P[i][0]); if (m) return P[i][1](m); }
+    return null;
+  }
+  function units(s) {
+    return s.replace(/(\d+(?:[.,]\d+)?) (Ko|Mo|Go)\b/g, function (a, n, u) {
+      return n.replace(",", ".") + " " + { Ko: "KB", Mo: "MB", Go: "GB" }[u];
+    });
+  }
+  function trs(str) {
+    var s = norm(str); if (!s) return str;
+    var r = tr1(s);
+    if (r === null && /[.!?…] /.test(s)) {
+      var parts = s.split(/(?<=[.!?…])\s+/), any = false;
+      var out = parts.map(function (p) { var t = tr1(p); if (t !== null) any = true; return t === null ? p : t; });
+      if (any) r = out.join(" ");
+    }
+    if (r === null) r = s;
+    r = units(r);
+    if (r === s) return str;
+    if (/^[a-zé]/.test(s) && /^[A-Z]/.test(r)) r = r.charAt(0).toLowerCase() + r.slice(1);
+    var lead = String(str).match(/^\s*/)[0], trail = String(str).match(/\s*$/)[0];
+    return lead + r + trail;
+  }
+
+  var origText = new WeakMap(), lastEn = new WeakMap();
+  var ATTRS = ["placeholder", "aria-label", "alt", "title"];
+  function skipNode(n) {
+    var p = n.parentNode;
+    if (!p || p.nodeType !== 1) return true;
+    var tag = p.nodeName;
+    if (tag === "SCRIPT" || tag === "STYLE" || tag === "TEXTAREA") return true;
+    if (p.closest && p.closest("#lang-sw, .d-txt strong, #who, #adm-sheet, .profile-chip:not([data-id=self]):not(.add)")) return true;
+    return false;
+  }
+  function fixOption(n) {
+    var p = n.parentNode;
+    if (p && p.nodeName === "OPTION" && !p.hasAttribute("value")) p.setAttribute("value", p.textContent);
+  }
+  function doText(n) {
+    if (skipNode(n)) return;
+    var cur = n.nodeValue;
+    if (lang === "en") {
+      if (origText.has(n) && lastEn.get(n) === cur) return;
+      fixOption(n);
+      var t = trs(cur);
+      if (t !== cur) { origText.set(n, cur); lastEn.set(n, t); n.nodeValue = t; }
+    } else if (origText.has(n)) {
+      var o = origText.get(n); origText.delete(n); lastEn.delete(n);
+      if (n.nodeValue === cur) n.nodeValue = o;
+    }
+  }
+  function doAttrs(el) {
+    if (!el.getAttribute || (el.closest && el.closest("#lang-sw"))) return;
+    ATTRS.forEach(function (a) {
+      var v = el.getAttribute(a); if (v === null) return;
+      var key = "data-fr-" + a, stored = el.getAttribute(key);
+      if (lang === "en") {
+        if (stored !== null && el.getAttribute("data-en-" + a) === v) return;
+        var t = trs(v);
+        if (t !== v) { el.setAttribute(key, v); el.setAttribute("data-en-" + a, t); el.setAttribute(a, t); }
+      } else if (stored !== null) {
+        el.setAttribute(a, stored); el.removeAttribute(key); el.removeAttribute("data-en-" + a);
+      }
+    });
+  }
+  function walk(root) {
+    if (root.nodeType === 3) { doText(root); return; }
+    if (root.nodeType !== 1) return;
+    doAttrs(root);
+    var w = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, null), n;
+    while ((n = w.nextNode())) { if (n.nodeType === 3) doText(n); else doAttrs(n); }
+  }
+  var busy = false;
+  var mo = new MutationObserver(function (recs) {
+    if (busy) return; busy = true;
+    try {
+      recs.forEach(function (r) {
+        if (r.type === "characterData") doText(r.target);
+        else if (r.type === "attributes") doAttrs(r.target);
+        else r.addedNodes.forEach(walk);
+      });
+    } finally { busy = false; }
+  });
+  function observe() {
+    mo.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+  }
+
+  /* fenêtres de confirmation du navigateur */
+  var oc = window.confirm;
+  window.confirm = function (m) { return oc.call(window, lang === "en" ? trs(m) : m); };
+  var op = window.prompt;
+  window.prompt = function (m, d) { return op.call(window, lang === "en" ? trs(m) : m, d); };
+
+  var css = document.createElement("style");
+  css.textContent =
+    "#lang-sw{display:inline-flex;border:1.5px solid rgba(255,255,255,.55);border-radius:999px;overflow:hidden;flex:none}" +
+    "#lang-sw button{min-width:40px;min-height:34px;padding:0 10px;border:0;background:transparent;color:#fff;font:inherit;font-weight:700;font-size:13px;cursor:pointer}" +
+    "#lang-sw button[aria-pressed=true]{background:#C9A227;color:#0F2A22}" +
+    ".bar-r{display:flex;align-items:center;gap:8px}.bar-r .btn{white-space:nowrap}#lang-sw button{min-width:34px;padding:0 8px}";
+  document.head.appendChild(css);
+
+  function setLang(l) {
+    lang = l;
+    try { localStorage.setItem(KEY, l); } catch (e) {}
+    document.documentElement.lang = l;
+    document.title = l === "en" ? "BFC Safe Family – Your digital vault" : "BFC Safe Family – Votre coffre numérique";
+    Array.prototype.forEach.call(document.querySelectorAll("#lang-sw button"), function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-l") === l)); });
+    busy = true; try { walk(document.body); } finally { busy = false; }
+  }
+  var sw = document.getElementById("lang-sw");
+  if (sw) sw.addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-l]"); if (b) setLang(b.getAttribute("data-l"));
+  });
+  observe();
+  setLang(lang);
+  window.__bfcLang = function () { return lang; };
+  window.__bfcTr = trs;
+})();
+</script>
+
 </body>
 </html>
