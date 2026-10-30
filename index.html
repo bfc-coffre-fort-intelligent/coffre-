@@ -227,6 +227,14 @@ input[type=file]{height:auto;padding:10px 12px}
 
   var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+  // Compteur anonyme : +1 par ouverture de l'application (un seul nombre, aucune donnée personnelle).
+  try {
+    if (!sessionStorage.getItem("bfc_open")) {
+      sessionStorage.setItem("bfc_open", "1");
+      db.rpc("noter_evenement", { p_evt: "ouverture_app" }).then(function () {}, function () {});
+    }
+  } catch (e) {}
+
   function $(id) { return document.getElementById(id); }
 
   var authView = $("auth-view"), appView = $("app-view"), signOutBtn = $("sign-out");
@@ -985,7 +993,7 @@ try {
   (function () {
   // Bouton « Administration » : visible seulement pour un compte administrateur (contrôlé par la base).
   var ST = { essai: "Essai", actif: "Actif", grace: "Délai de grâce", lecture_seule: "Lecture seule", ferme: "Fermé" };
-  var sheet = null, clients = [], current = null, isAdmin = false, checking = false;
+  var cnt = [], sheet = null, clients = [], current = null, isAdmin = false, checking = false;
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function amountFor(x) { return x > 0 ? 2700 + 300 * x : 3000; }
   function fmtF(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " FCFA"; }
@@ -1029,7 +1037,20 @@ try {
     var r = await db.rpc("admin_lister_clients");
     if (r.error) { showToast("Accès refusé ou erreur."); return false; }
     clients = r.data || [];
+    try { var rc = await db.rpc("admin_compteurs"); cnt = (rc && !rc.error && rc.data) ? rc.data : []; } catch (e) { cnt = []; }
     return true;
+  }
+  function cntHtml() {
+    if (!cnt.length) return "";
+    var t = { v: 0, c: 0, o: 0, n: 0 };
+    cnt.slice(0, 7).forEach(function (x) { t.v += x.visites; t.c += x.clics; t.o += x.ouvertures; t.n += x.comptes; });
+    var rows = cnt.slice(0, 7).map(function (x) {
+      var d = String(x.jour).split("-");
+      return "<tr><td>" + d[2] + "/" + d[1] + "</td><td>" + x.visites + "</td><td>" + x.clics + "</td><td>" + x.comptes + "</td></tr>";
+    }).join("");
+    return '<div class="card"><b>Les 7 derniers jours</b>' +
+      '<div class="sub">' + t.v + ' visites de la page d\'accueil · ' + t.c + ' clics sur « Créer mon coffre » · ' + t.n + ' comptes créés</div>' +
+      '<table style="width:100%;font-size:13px;margin-top:6px;text-align:center"><tr style="color:var(--muted)"><th>Jour</th><th>Visites</th><th>Clics</th><th>Comptes</th></tr>' + rows + '</table></div>';
   }
   function renderList(filter) {
     var f = (filter || "").trim().toLowerCase();
@@ -1046,6 +1067,7 @@ try {
       '<div class="stats"><div class="stat"><b>' + clients.length + '</b><span>comptes</span></div>' +
       '<div class="stat"><b>' + n.actif + '</b><span>actifs</span></div>' +
       '<div class="stat"><b>' + n.retard + '</b><span>échéance dépassée</span></div></div>' +
+      cntHtml() +
       '<input id="adm-q" type="search" placeholder="Chercher un e-mail" value="' + esc(filter || "") + '">' +
       '<ul>' + (rows.length ? rows.map(function (c, i) {
         var d = daysLeft(c.echeance), note = "";

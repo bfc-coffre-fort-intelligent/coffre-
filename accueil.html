@@ -569,5 +569,26 @@ footer .slogan{font-family:var(--serif);color:#fff;font-size:19px;margin-bottom:
   setLang(lang);
 })();
 </script>
+<script>
+/* Compteur anonyme : on compte des nombres, jamais des personnes. */
+(function () {
+  var U = "https://zccvohfllkutrisygadf.supabase.co/rest/v1/rpc/noter_evenement";
+  var K = "sb_publishable_Ro99vtshY2gyqklWUdjB_Q_hVMzU0XO";
+  function note(e) {
+    try {
+      fetch(U, { method: "POST", keepalive: true,
+        headers: { "apikey": K, "Authorization": "Bearer " + K, "Content-Type": "application/json" },
+        body: JSON.stringify({ p_evt: e }) }).catch(function () {});
+    } catch (x) {}
+  }
+  try {
+    if (!sessionStorage.getItem("bfc_visit")) { sessionStorage.setItem("bfc_visit", "1"); note("visite_accueil"); }
+  } catch (x) {}
+  document.addEventListener("click", function (ev) {
+    var a = ev.target.closest && ev.target.closest('a[href*="inscription=1"]');
+    if (a) note("clic_creer");
+  });
+})();
+</script>
 </body>
 </html>
