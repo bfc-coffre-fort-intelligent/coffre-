@@ -145,7 +145,10 @@ footer .slogan{font-family:var(--serif);color:#fff;font-size:19px;margin-bottom:
       <svg viewBox="0 0 200 200" aria-hidden="true"><circle cx="100" cy="100" r="92" fill="none" stroke="#B8892F" stroke-width="10"/><rect x="62" y="96" width="76" height="58" rx="10" fill="none" stroke="#B8892F" stroke-width="12"/><path d="M78 96V76a22 22 0 0 1 44 0v20" fill="none" stroke="#B8892F" stroke-width="12" stroke-linecap="round"/></svg>
       BFC Safe Family
     </a>
-    <a class="btn line small" href="./?app=1">Se connecter</a>
+    <div class="bar-r">
+      <span id="lang-sw" role="group" aria-label="Langue / Language"><button type="button" data-l="fr" aria-pressed="true">FR</button><button type="button" data-l="en" aria-pressed="false">EN</button></span>
+      <a class="btn line small" href="./?app=1">Se connecter</a>
+    </div>
   </div>
 </header>
 
@@ -339,6 +342,148 @@ footer .slogan{font-family:var(--serif);color:#fff;font-size:19px;margin-bottom:
       if (on) { v.currentTime = 0; var p = v.play(); if (p && p.catch) p.catch(function () {}); }
     });
   });
+})();
+</script>
+<script>
+(function () {
+  /* Langue : Français / English (le choix est partagé avec l'application) */
+  var KEY = "bfc_lang", lang = "fr";
+  try {
+    var q = (location.search.match(/[?&]lang=(fr|en)/) || [])[1];
+    var saved = localStorage.getItem(KEY);
+    if (q) lang = q; else if (saved === "fr" || saved === "en") lang = saved;
+    else if (/^en/i.test(navigator.language || "")) lang = "en";
+  } catch (e) {}
+  var D = {
+    "Se connecter": "Sign in",
+    "Vos documents importants. Protégés aujourd'hui, accessibles demain.": "Your important documents. Protected today, accessible tomorrow.",
+    "BFC Safe Family est le coffre numérique de votre famille. Vous photographiez un document : il est rangé, protégé, et retrouvé en quelques secondes.": "BFC Safe Family is your family's digital vault. You photograph a document: it is filed, protected, and found again in seconds.",
+    "Essayer gratuitement 7 jours": "Try it free for 7 days",
+    "J'ai déjà un compte": "I already have an account",
+    "Aucun paiement pour l'essai.": "No payment for the trial.",
+    "Voyez comment ça marche": "See how it works",
+    "Le bulletin est dans un tiroir. L'acte de naissance, dans une valise. Le diplôme, dans un téléphone perdu.": "The report card is in a drawer. The birth certificate, in a suitcase. The diploma, in a lost phone.",
+    "Ces papiers sont des années de travail et des preuves de ce que nous sommes. Pourtant, on les garde un peu au hasard, jusqu'au jour où on en a besoin.": "These papers are years of work and proof of who we are. Yet we keep them somewhat at random, until the day we need them.",
+    "Un coffre simple pour toute la famille": "A simple vault for the whole family",
+    "Photographiez": "Take a photo",
+    "Prenez le document en photo, ou choisissez un fichier : PDF, Word, Excel ou vidéo.": "Take a photo of the document, or choose a file: PDF, Word, Excel or video.",
+    "Rangez par personne": "File by person",
+    "Chaque membre de la famille a son espace. Vous voyez tout, chacun garde ses papiers à sa place.": "Each family member has their own space. You see everything, and everyone keeps their papers in their place.",
+    "Retrouvez en un instant": "Find it in an instant",
+    "Tapez un mot, une année, un établissement. Le document s'ouvre depuis votre téléphone.": "Type a word, a year, a school. The document opens from your phone.",
+    "Pour toute la famille, à chaque étape": "For the whole family, at every stage",
+    "Les parents": "Parents",
+    "Bulletins, certificats de scolarité, vaccins, actes de naissance : tout est au même endroit, pour chaque enfant.": "Report cards, school certificates, vaccination records, birth certificates: everything in one place, for each child.",
+    "Les élèves et étudiants": "Pupils and students",
+    "Diplômes, relevés de notes, attestations de réussite : prêts quand une inscription ou un concours les demande.": "Diplomas, transcripts, certificates of achievement: ready when an enrolment or an exam asks for them.",
+    "Les familles dispersées": "Families living apart",
+    "Un parent au village, un enfant à l'étranger : les papiers importants restent accessibles à celui qui gère le compte, où qu'il soit.": "A parent in the village, a child abroad: the important papers stay accessible to whoever manages the account, wherever they are.",
+    "Ceux qui déménagent ou voyagent": "Those who move or travel",
+    "Plus de valise à fouiller. Vos documents vous suivent sur votre téléphone ou votre ordinateur.": "No more digging through a suitcase. Your documents follow you on your phone or computer.",
+    "Ce que vous pouvez ranger": "What you can store",
+    "Bulletins": "Report cards", "Diplômes": "Diplomas", "Actes de naissance": "Birth certificates",
+    "Certificats": "Certificates", "Attestations": "Attestations", "Relevés de notes": "Transcripts",
+    "Photos d'école": "School photos", "PDF, Word, Excel": "PDF, Word, Excel", "Vidéos": "Videos",
+    "Ce que vous déposez reste privé": "What you store stays private",
+    "Personne ne regarde vos documents": "Nobody looks at your documents",
+    "Notre suivi s'occupe de votre abonnement et de l'espace utilisé, jamais du contenu de vos documents.": "Our monitoring only deals with your subscription and the space used, never the content of your documents.",
+    "Un espace réservé à vous": "A space reserved for you",
+    "Chaque compte est séparé des autres. Un autre client ne peut pas voir vos documents.": "Each account is separate from the others. Another customer cannot see your documents.",
+    "L'aide de l'IA est facultative": "AI help is optional",
+    "Elle propose un titre à partir de la photo, seulement si vous l'activez. Sinon, rien n'est envoyé.": "It suggests a title from the photo, only if you turn it on. Otherwise, nothing is sent.",
+    "Vous gardez la main": "You stay in control",
+    "Vous téléchargez vos données quand vous voulez, et vous pouvez demander la fermeture de votre compte.": "You download your data whenever you want, and you can ask to close your account.",
+    "Hébergé en Europe": "Hosted in Europe",
+    "Vos fichiers sont stockés sur des serveurs sécurisés à Londres.": "Your files are stored on secure servers in London.",
+    "Le coffre BFC Safe se referme sur vos documents": "The BFC Safe vault closes on your documents",
+    "🔊 Activer le son": "🔊 Turn sound on", "🔇 Couper le son": "🔇 Turn sound off",
+    "Vos documents, bien rangés dans leur coffre.": "Your documents, neatly stored in their vault.",
+    "Voir comment vos documents sont protégés": "See how your documents are protected",
+    "Essayez d'abord, payez ensuite": "Try first, pay later",
+    "7 jours gratuits": "7 free days",
+    "Tout fonctionne pendant l'essai, avec 1 Go d'espace.": "Everything works during the trial, with 1 GB of space.",
+    "par trimestre": "per quarter",
+    "3 Go d'espace pour toute la famille": "3 GB of space for the whole family",
+    "Besoin de plus ? 300 FCFA de plus par Go et par trimestre": "Need more? 300 FCFA more per GB per quarter",
+    "Paiement par MTN Mobile Money ou Orange Money": "Pay by MTN Mobile Money or Orange Money",
+    "Créer mon compte gratuit": "Create my free account",
+    "Paiement confirmé, abonnement activé": "Payment confirmed, subscription activated",
+    "Vous payez, votre abonnement est activé.": "You pay, your subscription is activated.",
+    "Questions fréquentes": "Frequently asked questions",
+    "Combien de personnes dans un compte ?": "How many people in one account?",
+    "Vous, plus jusqu'à 3 profils : par exemple vos enfants ou un parent. Chaque profil a son espace, et vous voyez tout depuis votre compte.": "You, plus up to 3 profiles: for example your children or a parent. Each profile has its own space, and you see everything from your account.",
+    "Que se passe-t-il après les 7 jours d'essai ?": "What happens after the 7-day trial?",
+    "Si vous ne payez pas, votre compte passe en lecture seule : vous voyez et téléchargez vos documents, mais vous ne pouvez plus en ajouter. Dès que vous payez, tout redevient normal.": "If you don't pay, your account becomes read-only: you can view and download your documents, but you can no longer add any. As soon as you pay, everything goes back to normal.",
+    "Comment payer ?": "How do I pay?",
+    "Par MTN Mobile Money ou Orange Money. Depuis l'application, touchez « Augmenter mon espace », puis suivez les explications. Votre abonnement est activé à la réception du paiement.": "By MTN Mobile Money or Orange Money. In the app, tap “Increase my space”, then follow the instructions. Your subscription is activated when we receive the payment.",
+    "Puis-je l'utiliser sur ordinateur ?": "Can I use it on a computer?",
+    "Oui. Ouvrez www.coffre-bfc.com avec Chrome ou Edge. Vous pouvez aussi l'installer comme une application, sur votre téléphone ou votre ordinateur.": "Yes. Open www.coffre-bfc.com with Chrome or Edge. You can also install it like an app, on your phone or your computer.",
+    "L'intelligence artificielle lit-elle mes documents ?": "Does artificial intelligence read my documents?",
+    "Seulement si vous l'avez activée. Elle sert uniquement à proposer un titre à partir de la photo. Si vous la refusez, rien n'est envoyé.": "Only if you have turned it on. It is only used to suggest a title from the photo. If you decline it, nothing is sent.",
+    "Dois-je garder mes originaux ?": "Should I keep my originals?",
+    "Oui, nous vous le recommandons toujours. BFC Safe Family est un coffre de copies numériques : gardez aussi vos papiers importants en lieu sûr.": "Yes, we always recommend it. BFC Safe Family is a vault of digital copies: also keep your important papers in a safe place.",
+    "Puis-je récupérer ou supprimer mes données ?": "Can I get back or delete my data?",
+    "Oui, à tout moment : vous téléchargez vos données depuis l'application, et vous pouvez demander la fermeture de votre compte.": "Yes, at any time: you download your data from the app, and you can ask to close your account.",
+    "Une question ? Écrivez-nous": "A question? Write to us",
+    "BFC Safe Family est un service de BFC Consulting, à Douala, au Cameroun. Une vraie personne vous répond.": "BFC Safe Family is a service of BFC Consulting, in Douala, Cameroon. A real person answers you.",
+    "Téléphone": "Phone", "E-mail": "Email",
+    "Comment vos documents sont protégés": "How your documents are protected",
+    "Conditions d'utilisation": "Terms of use", "Politique de confidentialité": "Privacy policy",
+    "BFC Consulting · Douala, Cameroun · RCCM : RCN DLN 2022/B/1637 · N° de contribuable (NIU) : M072217528739R": "BFC Consulting · Douala, Cameroon · RCCM: RCN DLN 2022/B/1637 · Taxpayer No. (NIU): M072217528739R",
+    "© 2026 BFC Consulting. Tous droits réservés. BFC Safe Family, le logo et les textes de ce site ne peuvent être copiés ni réutilisés sans autorisation.": "© 2026 BFC Consulting. All rights reserved. BFC Safe Family, the logo and the texts of this site may not be copied or reused without permission.",
+    "BFC Safe Family, accueil": "BFC Safe Family, home"
+  };
+  var META = {
+    title: ["BFC Safe Family – Vos documents importants, protégés", "BFC Safe Family – Your important documents, protected"],
+    desc: ["BFC Safe Family est le coffre numérique de votre famille : photographiez vos documents importants, ils sont protégés et retrouvés en quelques secondes. 7 jours d'essai gratuit.", "BFC Safe Family is your family's digital vault: photograph your important documents, they are protected and found again in seconds. 7-day free trial."]
+  };
+  function norm(s) { return String(s).replace(/[  ]/g, " ").replace(/[’]/g, "'").replace(/\s+/g, " ").trim(); }
+  function trs(str) {
+    var s = norm(str); if (!s || !Object.prototype.hasOwnProperty.call(D, s)) return str;
+    var lead = String(str).match(/^\s*/)[0], trail = String(str).match(/\s*$/)[0];
+    return lead + D[s] + trail;
+  }
+  var orig = new WeakMap();
+  var ATTRS = ["aria-label"];
+  function walk() {
+    var w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT), n;
+    while ((n = w.nextNode())) {
+      var p = n.parentNode;
+      if (!p || p.nodeName === "SCRIPT" || p.nodeName === "STYLE" || (p.closest && p.closest("#lang-sw"))) continue;
+      if (lang === "en") { var cur = n.nodeValue; if (orig.has(n)) continue; var t = trs(cur); if (t !== cur) { orig.set(n, cur); n.nodeValue = t; } }
+      else if (orig.has(n)) { n.nodeValue = orig.get(n); orig.delete(n); }
+    }
+    document.querySelectorAll("[aria-label]").forEach(function (el) {
+      if (el.closest("#lang-sw")) return;
+      var st = el.getAttribute("data-fr-aria");
+      if (lang === "en") { if (st === null) { var v = el.getAttribute("aria-label"), t2 = trs(v); if (t2 !== v) { el.setAttribute("data-fr-aria", v); el.setAttribute("aria-label", t2); } } }
+      else if (st !== null) { el.setAttribute("aria-label", st); el.removeAttribute("data-fr-aria"); }
+    });
+  }
+  function setLang(l) {
+    lang = l;
+    try { localStorage.setItem(KEY, l); } catch (e) {}
+    document.documentElement.lang = l;
+    var i = l === "en" ? 1 : 0;
+    document.title = META.title[i];
+    var md = document.querySelector('meta[name="description"]'); if (md) md.setAttribute("content", META.desc[i]);
+    Array.prototype.forEach.call(document.querySelectorAll("#lang-sw button"), function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-l") === l)); });
+    walk();
+  }
+  /* le texte du bouton de son change quand on l'utilise */
+  new MutationObserver(function (recs) {
+    if (lang !== "en") return;
+    recs.forEach(function (r) { var n = r.target.nodeType === 3 ? r.target : null; if (n && !orig.has(n)) { var c = n.nodeValue, t = trs(c); if (t !== c) { orig.set(n, c); n.nodeValue = t; } } });
+  }).observe(document.body, { subtree: true, characterData: true });
+  document.querySelectorAll(".snd").forEach(function (b) {
+    b.addEventListener("click", function () { setTimeout(function () { if (lang === "en") { var n = b.firstChild; if (n) { n.nodeValue = trs(n.nodeValue); } } }, 0); });
+  });
+  var sw = document.getElementById("lang-sw");
+  if (sw) sw.addEventListener("click", function (e) { var b = e.target.closest("button[data-l]"); if (b) setLang(b.getAttribute("data-l")); });
+  var css = document.createElement("style");
+  css.textContent = ".bar-r{display:flex;align-items:center;gap:8px}.bar-r .btn{white-space:nowrap}#lang-sw{display:inline-flex;border:2px solid rgba(255,255,255,.55);border-radius:999px;overflow:hidden;flex:none}#lang-sw button{min-width:36px;min-height:36px;padding:0 9px;border:0;background:transparent;color:#fff;font:inherit;font-weight:700;font-size:14px;cursor:pointer}#lang-sw button[aria-pressed=true]{background:var(--brass);color:#fff}";
+  document.head.appendChild(css);
+  setLang(lang);
 })();
 </script>
 </body>
