@@ -46,8 +46,8 @@ a{color:inherit}
 /* en-tête principal */
 .hero{background:var(--pine);color:#fff;padding:36px 0 64px;position:relative;overflow:hidden}
 .hero .wrap{display:grid;gap:28px;align-items:center}
-.emblem{width:112px;height:112px}
-.emblem svg{width:100%;height:100%;display:block}
+.emblem{width:100%;max-width:300px;height:auto}.emblem img{width:100%;height:auto;display:block}.brand .bm{width:auto;height:40px}
+
 .hero h1{color:#fff;font-size:clamp(34px,8vw,58px);letter-spacing:-.01em}
 .hero .lead{margin-top:18px;font-size:clamp(19px,4.4vw,22px);color:#DDE8E2;max-width:34em}
 .hero .actions{margin-top:28px;display:flex;flex-wrap:wrap;gap:12px}
@@ -58,7 +58,7 @@ a{color:inherit}
 @media (min-width:760px){
   .hero{padding:64px 0 88px}
   .hero .wrap{grid-template-columns:1.3fr .7fr;gap:56px}
-  .emblem{width:100%;height:auto;max-width:300px;justify-self:center;order:2}
+  .emblem{width:100%;height:auto;max-width:430px;justify-self:center;order:2}
 }
 
 /* sections */
@@ -157,17 +157,14 @@ footer .slogan{font-family:var(--serif);color:#fff;font-size:19px;margin-bottom:
 /* sous-titre de la marque */
 .brand .tag{display:block;font:400 12px/1.2 var(--sans);opacity:.8;margin-top:2px}
 @media (max-width:759px){#sticky-cta.on{display:block}footer{padding-bottom:96px}}
-@media (max-width:480px){.top .wrap{gap:8px}.brand{font-size:18px;white-space:nowrap}.brand svg{display:none}.btn.small{padding:0 12px;font-size:15px}}
+@media (max-width:480px){.top .wrap{gap:8px}.brand{font-size:18px;white-space:nowrap}.brand .bm{height:34px}.brand .fam{display:none}.btn.small{padding:0 12px;font-size:15px}}
 </style>
 </head>
 <body>
 
 <header class="top">
   <div class="wrap">
-    <a class="brand" href="accueil.html" aria-label="BFC Safe Family, accueil">
-      <svg viewBox="0 0 200 200" aria-hidden="true"><circle cx="100" cy="100" r="92" fill="none" stroke="#B8892F" stroke-width="10"/><rect x="62" y="96" width="76" height="58" rx="10" fill="none" stroke="#B8892F" stroke-width="12"/><path d="M78 96V76a22 22 0 0 1 44 0v20" fill="none" stroke="#B8892F" stroke-width="12" stroke-linecap="round"/></svg>
-      <span>BFC Safe Family<small class="tag">Votre coffre numérique</small></span>
-    </a>
+    <a class="brand" href="accueil.html" aria-label="BFC Safe Family, accueil"><img class="bm" src="symbole-fond-vert.svg" alt="" width="46" height="41"><span>BFC Safe<span class="fam"> Family</span></span></a>
     <div class="bar-r">
       <span id="lang-sw" role="group" aria-label="Langue / Language"><button type="button" data-l="fr" aria-pressed="true">FR</button><button type="button" data-l="en" aria-pressed="false">EN</button></span>
       <a class="btn line small" href="./?app=1">Se connecter</a>
@@ -178,16 +175,7 @@ footer .slogan{font-family:var(--serif);color:#fff;font-size:19px;margin-bottom:
 <main>
   <div class="hero">
     <div class="wrap">
-      <div class="emblem" aria-hidden="true">
-        <svg viewBox="0 0 200 200">
-          <circle cx="100" cy="100" r="92" fill="none" stroke="#B8892F" stroke-width="2.5"/>
-          <circle cx="100" cy="100" r="82" fill="none" stroke="#B8892F" stroke-opacity=".45" stroke-width="2" stroke-dasharray="1 7" stroke-linecap="round"/>
-          <rect x="62" y="96" width="76" height="58" rx="10" fill="#B8892F" fill-opacity=".1" stroke="#B8892F" stroke-width="4"/>
-          <path class="shackle" d="M78 96V76a22 22 0 0 1 44 0v20" fill="none" stroke="#B8892F" stroke-width="4" stroke-linecap="round"/>
-          <circle cx="100" cy="122" r="6" fill="#B8892F"/>
-          <rect x="98" y="124" width="4" height="14" rx="2" fill="#B8892F"/>
-        </svg>
-      </div>
+      <div class="emblem"><img src="logo-vertical-fond-vert.svg" alt="BFC Safe Family – Votre coffre numérique" width="892" height="655"></div>
       <div>
         <p class="eyebrow">Vos documents importants. Protégés aujourd'hui, accessibles demain.</p>
         <h1>Où sont les documents importants de votre famille ?</h1>

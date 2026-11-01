@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="346 14 430 384" role="img" aria-label="BFC Safe Family – Votre coffre numérique.">
+<defs>
+ <linearGradient id="gold" x1="0.1" y1="0" x2="0.9" y2="1"><stop offset="0" stop-color="#EFC45E"/><stop offset=".5" stop-color="#D99723"/><stop offset="1" stop-color="#A8730F"/></linearGradient>
+ <linearGradient id="gold2" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#A8730F"/><stop offset=".45" stop-color="#D99723"/><stop offset="1" stop-color="#EFC45E"/></linearGradient>
+ <mask id="cut" maskUnits="userSpaceOnUse" x="300" y="0" width="520" height="440"><rect x="300" y="0" width="520" height="440" fill="#fff"/><path d="M370 280 C356 310 366 342 424 356 C506 376 626 346 702 284 C748 246 766 194 742 148 C752 198 724 238 678 270 C602 318 504 336 432 326 C402 322 382 306 370 280 Z" fill="#000" stroke="#000" stroke-width="16" stroke-linejoin="round"/></mask>
+ <clipPath id="L"><rect x="300" y="0" width="238" height="440"/></clipPath>
+ <clipPath id="R"><rect x="538" y="0" width="300" height="440"/></clipPath>
+</defs>
+<g mask="url(#cut)">
+ <path clip-path="url(#L)" fill="#F3F5F2" fill-rule="evenodd" d="M538 26 L716 94 V216 C716 300 640 350 538 384 C436 350 360 300 360 216 V94 Z M538 64 L682 116 V212 C682 272 626 314 538 346 C450 314 394 272 394 212 V116 Z"/>
+ <path clip-path="url(#R)" fill="url(#gold)" fill-rule="evenodd" d="M538 26 L716 94 V216 C716 300 640 350 538 384 C436 350 360 300 360 216 V94 Z M538 64 L682 116 V212 C682 272 626 314 538 346 C450 314 394 272 394 212 V116 Z"/>
+ <!-- document -->
+ <path d="M441 262 V124 a18 18 0 0 1 18-18 H588" fill="none" stroke="#F3F5F2" stroke-width="14" stroke-linecap="butt"/>
+ <path d="M600 106 L652 158 H614 a14 14 0 0 1 -14 -14 Z" fill="#F3F5F2"/>
+ <path d="M646 172 V262" fill="none" stroke="#F3F5F2" stroke-width="12"/>
+ <g stroke="#F3F5F2" stroke-width="11" stroke-linecap="round"><path d="M470 149 H574"/><path d="M470 177 H574"/><path d="M470 205 H526"/></g>
+ <!-- cadenas -->
+ <path d="M538 244 V216 a36 36 0 0 1 72 0 V244" fill="none" stroke="#F3F5F2" stroke-width="18"/>
+ <path fill="#F3F5F2" fill-rule="evenodd" d="M526 238 h98 a14 14 0 0 1 14 14 V330 H512 V252 a14 14 0 0 1 14 -14 Z M574 262 a15 15 0 1 0 0.01 0 Z M570 274 h8 l5 34 h-18 Z"/>
+</g>
+<path d="M370 280 C356 310 366 342 424 356 C506 376 626 346 702 284 C748 246 766 194 742 148 C752 198 724 238 678 270 C602 318 504 336 432 326 C402 322 382 306 370 280 Z" fill="url(#gold2)"/></svg>
