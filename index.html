@@ -721,9 +721,10 @@ try {
     ov.querySelector("#adj-ok").onclick = function () {
       var m = document.getElementById("adj-m"), o = orderQuad(q), wp = o && warp(cv, o);
       if (!wp) { m.textContent = "Les points ne forment pas une feuille. Replacez-les sur les 4 coins."; return; }
+      var back = (mode === "scan" || mode === "bw") ? mode : "crop";
       cache.scan = { base: wp, found: true, cv: cv, quad: q }; cache.files = {};
       close();
-      choose(input, "scan").then(function () {
+      choose(input, back).then(function () {
         document.getElementById("scan-hint").textContent = "Coins ajustés. Choisissez la version que vous préférez.";
       });
     };
@@ -737,7 +738,7 @@ try {
     "#scan-box[hidden]{display:none}" +
     "#scan-img{display:block;max-width:100%;max-height:260px;margin:0 auto 8px;border-radius:8px;background:#EEF1EF}" +
     "#scan-box .seg{display:flex;gap:6px}" +
-    "#scan-box .seg button{flex:1;min-height:44px;border:1.5px solid var(--line);background:#fff;color:var(--pine);border-radius:10px;font:inherit;font-weight:600;font-size:14px;cursor:pointer}" +
+    "#scan-box .seg button{flex:1;padding:0 4px;min-height:44px;border:1.5px solid var(--line);background:#fff;color:var(--pine);border-radius:10px;font:inherit;font-weight:600;font-size:13px;cursor:pointer}" +
     "#scan-box .seg button[aria-pressed=true]{background:var(--pine);color:#fff;border-color:var(--pine)}" +
     "#scan-box .hint{margin:8px 0 0}" +
     "#scan-box .adj{display:block;width:100%;margin-top:8px;min-height:44px;border:1.5px dashed var(--pine);background:#fff;color:var(--pine);border-radius:10px;font:inherit;font-weight:600;font-size:14px;cursor:pointer}" +
@@ -757,6 +758,7 @@ try {
     box.id = "scan-box"; box.hidden = true;
     box.innerHTML = '<img id="scan-img" alt="Aperçu du document"><div class="seg" role="group" aria-label="Version du document">' +
       '<button type="button" data-m="orig" aria-pressed="false">Original</button>' +
+      '<button type="button" data-m="crop" aria-pressed="false">Recadré</button>' +
       '<button type="button" data-m="scan" aria-pressed="true">Scan</button>' +
       '<button type="button" data-m="bw" aria-pressed="false">Noir et blanc</button></div>' +
       '<button type="button" class="adj" id="scan-adj">✂ Ajuster les coins</button>' +
@@ -788,6 +790,7 @@ try {
     Array.prototype.forEach.call(box.querySelectorAll("button[data-m]"), function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-m") === m)); });
     if (!cache.files[m]) {
       if (m === "bw") cache.files.bw = await toFile(enhance(cache.scan.base, true, !cache.scan.found), baseName(cache.orig) + "-nb");
+      else if (m === "crop") cache.files.crop = await toFile(cloneCanvas(cache.scan.base), baseName(cache.orig) + "-recadre");
       else if (m === "scan") cache.files.scan = await toFile(enhance(cache.scan.base, false, !cache.scan.found), baseName(cache.orig) + "-scan");
       else cache.files.orig = await shrinkPlain(cache.orig);
     }
@@ -2624,6 +2627,7 @@ try {
     "Laissez vide : proposé par l'IA": "Leave empty: suggested by the AI",
     "Laissez vide : « Document du » + la date": "Leave empty: “Document of” + the date",
     "Noir et blanc": "Black and white",
+    "Recadré": "Cropped",
     "✂ Ajuster les coins": "✂ Adjust the corners",
     "Aperçu du document": "Document preview", "Version du document": "Document version",
     "Préparation du scan…": "Preparing the scan…",
