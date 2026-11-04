@@ -600,6 +600,7 @@ try {
     var c = document.createElement("canvas"); c.width = cv.width; c.height = cv.height;
     c.getContext("2d").drawImage(cv, 0, 0); return c;
   }
+  var MIXK = 0.55;
   function enhance(cv, bw, gentle) {
     var w = cv.width, h = cv.height, out = cloneCanvas(cv), cx = out.getContext("2d");
     var x, y, c, dx, dy, i, bd = null;
@@ -624,7 +625,7 @@ try {
       var bx = big.getContext("2d"); bx.imageSmoothingQuality = "high"; bx.drawImage(bgc, 0, 0, w, h);
       bd = bx.getImageData(0, 0, w, h).data;
     }
-    var id = cx.getImageData(0, 0, w, h), d = id.data, n = w * h, hist = new Array(256).fill(0);
+    var id = cx.getImageData(0, 0, w, h), d = id.data, n = w * h, hist = new Array(256).fill(0), od = new Uint8ClampedArray(d);
     for (i = 0; i < n; i++) {
       var p = i * 4, gsum = 0;
       for (c = 0; c < 3; c++) {
@@ -641,6 +642,8 @@ try {
       for (c = 0; c < 3; c++) {
         var t = (d[p2 + c] - lo) / (hi - lo); t = t < 0 ? 0 : t > 1 ? 1 : t;
         d[p2 + c] = Math.pow(t, gentle ? 1.0 : 1.15) * 255;
+        /* Scan : on garde une part de l'image d'origine pour respecter les vraies couleurs du document */
+        if (!bw) d[p2 + c] = od[p2 + c] * (1 - MIXK) + d[p2 + c] * MIXK;
       }
       if (bw) {
         var gg = (d[p2] * 299 + d[p2 + 1] * 587 + d[p2 + 2] * 114) / 1000;
