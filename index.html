@@ -1112,6 +1112,7 @@ try {
       '<p class="sub" id="adm-info"></p>' +
       '<button id="adm-ok" class="btn wide" type="button">Paiement reçu</button>' +
       (c.statut === "essai" ? '<button id="adm-prol" class="btn ghost wide" type="button">Prolonger l\'essai de 7 jours</button>' : '') +
+      '<button id="adm-hist" class="btn ghost wide" type="button">Voir l\'historique</button>' +
       '<button id="adm-back" class="btn ghost wide" type="button">Retour</button></div>';
     var sx = sheet.querySelector("#adm-x"), sm = sheet.querySelector("#adm-m"), info = sheet.querySelector("#adm-info");
     function upd() {
@@ -1122,6 +1123,7 @@ try {
     upd();
     sx.addEventListener("change", function () { sm.value = amountFor(Number(sx.value) || 0); });
     sheet.querySelector("#adm-back").addEventListener("click", function () { renderList(""); });
+    sheet.querySelector("#adm-hist").addEventListener("click", function () { renderHist(c); });
     var pr = sheet.querySelector("#adm-prol");
     if (pr) pr.addEventListener("click", async function () {
       if (!window.confirm("Prolonger l'essai de " + c.email + " de 7 jours ?")) return;
@@ -1147,6 +1149,40 @@ try {
       await load();
       renderList("");
     });
+  }
+  /* --- Historique d'un client (jamais le contenu des documents) --- */
+  var HL = {
+    compte_cree: "Compte créé", email_confirme: "Adresse e-mail confirmée",
+    email_confirmation_envoye: "E-mail de confirmation envoyé", email_reinit_envoye: "E-mail de réinitialisation du mot de passe envoyé",
+    mot_de_passe_modifie: "Mot de passe modifié", essai_debut: "Essai gratuit commencé",
+    statut_change: "Statut modifié", espace_modifie: "Espace modifié", echeance_modifiee: "Échéance modifiée",
+    paiement: "Paiement enregistré", consentement: "Consentement", demande_fermeture: "Demande de fermeture de compte",
+    email_fermeture_envoye: "E-mail de fermeture envoyé", fermeture_statut: "Demande de fermeture : changement",
+    email_rappel_envoye: "E-mail de rappel d'expiration envoyé", profil_cree: "Profil créé"
+  };
+  function fmtHist(t) {
+    try { return new Date(t).toLocaleString("fr-FR", { timeZone: "Africa/Douala", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); }
+    catch (e) { return String(t); }
+  }
+  async function renderHist(c) {
+    sheet.innerHTML = '<div class="in"><h2>Historique</h2><div class="card"><div class="em">' + esc(c.email) + '</div><p class="sub">Chargement…</p></div></div>';
+    var r = await db.rpc("admin_historique", { p_email: c.email });
+    if (r.error) {
+      showToast("Historique indisponible.");
+      current = c; renderPay(); return;
+    }
+    var rows = r.data || [];
+    sheet.innerHTML =
+      '<div class="in"><h2>Historique</h2>' +
+      '<div class="card"><div class="em">' + esc(c.email) + '</div>' +
+      '<div class="sub">Les mouvements du compte et les e-mails envoyés. Jamais le contenu des documents.</div></div>' +
+      '<ul>' + (rows.length ? rows.map(function (x) {
+        return '<li><div class="card"><span class="em">' + esc(HL[x.code] || x.code) + '</span>' +
+          (x.detail ? '<span class="sub">' + esc(x.detail) + '</span>' : '') +
+          '<span class="sub">' + esc(fmtHist(x.cree_le)) + '</span></div></li>';
+      }).join("") : '<li class="sub">Aucun mouvement enregistré.</li>') + '</ul>' +
+      '<button id="adm-hback" class="btn ghost wide" type="button">Retour</button></div>';
+    sheet.querySelector("#adm-hback").addEventListener("click", function () { current = c; renderPay(); });
   }
   async function openAdmin() {
     ensureSheet();
