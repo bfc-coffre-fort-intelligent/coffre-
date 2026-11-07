@@ -382,6 +382,29 @@ input[type=file]{height:auto;padding:10px 12px}
   fb.style.marginTop = "12px";
   fb.textContent = "Mot de passe oublié ?";
   authForm.appendChild(fb);
+  var rb = document.createElement("button");
+  rb.type = "button";
+  rb.className = "btn ghost small";
+  rb.style.marginTop = "12px";
+  rb.style.marginLeft = "8px";
+  rb.textContent = "Renvoyer l'e-mail de confirmation";
+  rb.hidden = true;
+  authForm.appendChild(rb);
+  new MutationObserver(function () {
+    var t = authNotice.textContent || "";
+    rb.hidden = !(t.indexOf("Compte créé") === 0 || t.indexOf("non confirmée") > -1 || t.indexOf("not confirmed") > -1 || t.indexOf("Account created") === 0);
+  }).observe(authNotice, { childList: true, characterData: true, subtree: true });
+  rb.addEventListener("click", async function () {
+    var email = $("email").value.trim();
+    if (!email) { setNotice(authNotice, "Saisissez d'abord votre adresse e-mail ci-dessus.", "error"); return; }
+    rb.disabled = true;
+    setTimeout(function () { rb.disabled = false; }, 60000);
+    try {
+      var rr = await db.auth.resend({ type: "signup", email: email, options: { emailRedirectTo: location.origin + location.pathname } });
+      if (rr.error) { setNotice(authNotice, fr(rr.error.message), "error"); rb.disabled = false; return; }
+      setNotice(authNotice, "E-mail de confirmation renvoyé. Pensez à regarder aussi dans vos courriers indésirables (spam). Patientez une minute avant de réessayer.", "ok");
+    } catch (e) { setNotice(authNotice, fr(e && e.message), "error"); rb.disabled = false; }
+  });
   fb.addEventListener("click", async function () {
     var email = $("email").value.trim();
     if (!email) { setNotice(authNotice, "Saisissez d'abord votre adresse e-mail ci-dessus.", "error"); return; }
@@ -2656,6 +2679,9 @@ try {
     "8 caractères minimum.": "At least 8 characters.",
     "Se connecter": "Sign in", "Créer mon compte": "Create my account",
     "Mot de passe oublié ?": "Forgot password?",
+    "Renvoyer l'e-mail de confirmation": "Resend the confirmation email",
+    "E-mail de confirmation renvoyé.": "Confirmation email sent again.",
+    "Patientez une minute avant de réessayer.": "Wait one minute before trying again.",
     "Mes documents": "My documents", "Ajouter un document": "Add a document",
     "Titre du document": "Document title", "Type": "Type", "Année": "Year",
     "Établissement": "School / institution",
