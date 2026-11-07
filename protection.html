@@ -66,5 +66,87 @@ nav.other{margin-top:32px;padding-top:16px;border-top:1px solid var(--line)}
 
 <nav class="other"><a href="conditions.html">Conditions d'utilisation</a> · <a href="confidentialite.html">Politique de confidentialité</a></nav>
 </main>
+<script>
+/* Barre de navigation de lecture : sommaire, précédent/suivant, progression */
+(function () {
+  var hs = Array.prototype.slice.call(document.querySelectorAll("main h2"));
+  if (hs.length < 2) return;
+  var css = document.createElement("style");
+  css.textContent =
+    "html{scroll-padding-top:12px}" +
+    "body{padding-bottom:84px}" +
+    "#rd-prog{position:fixed;left:0;top:0;height:4px;width:0;background:#B8892F;z-index:50;transition:width .1s}" +
+    "#rd-bar{position:fixed;left:0;right:0;bottom:0;z-index:50;display:flex;gap:8px;align-items:center;justify-content:center;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid #D5DCD6;box-shadow:0 -4px 14px rgba(20,53,42,.08)}" +
+    "#rd-bar button{font:inherit;font-weight:700;color:#14352A;background:#fff;border:1.5px solid #14352A;border-radius:12px;min-height:48px;cursor:pointer}" +
+    "#rd-bar .nv{min-width:52px;font-size:22px;line-height:1}" +
+    "#rd-bar .nv:disabled{opacity:.35}" +
+    "#rd-bar #rd-toc{flex:1;max-width:340px;padding:0 12px;background:#14352A;color:#fff}" +
+    "#rd-sheet{position:fixed;inset:0;z-index:60;background:rgba(20,53,42,.45);display:none;align-items:flex-end}" +
+    "#rd-sheet.open{display:flex}" +
+    "#rd-sheet .pn{background:#fff;width:100%;max-height:78vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom))}" +
+    "#rd-sheet h3{font-family:Georgia,serif;font-size:20px;margin:0 0 8px;color:#14352A}" +
+    "#rd-sheet ol{list-style:none;margin:0;padding:0}" +
+    "#rd-sheet li a{display:block;padding:13px 6px;border-bottom:1px solid #E3E8E4;color:#1B2A24;text-decoration:none;font-size:16px}" +
+    "#rd-sheet li a.cur{font-weight:700;color:#14352A;background:#EEF3EF;border-radius:8px}" +
+    "#rd-sheet .close{margin-top:12px;width:100%;font:inherit;font-weight:700;min-height:48px;border-radius:12px;border:1.5px solid #14352A;background:#fff;color:#14352A}";
+  document.head.appendChild(css);
+
+  hs.forEach(function (h, i) { if (!h.id) h.id = "sec-" + (i + 1); });
+
+  var prog = document.createElement("div"); prog.id = "rd-prog"; document.body.appendChild(prog);
+
+  var bar = document.createElement("div"); bar.id = "rd-bar";
+  bar.setAttribute("role", "navigation"); bar.setAttribute("aria-label", "Navigation dans la page");
+  bar.innerHTML = '<button type="button" class="nv" id="rd-prev" aria-label="Section précédente">‹</button>' +
+    '<button type="button" id="rd-toc"></button>' +
+    '<button type="button" class="nv" id="rd-next" aria-label="Section suivante">›</button>';
+  document.body.appendChild(bar);
+
+  var sheet = document.createElement("div"); sheet.id = "rd-sheet";
+  sheet.innerHTML = '<div class="pn" role="dialog" aria-label="Sommaire"><h3>Sommaire</h3><ol></ol>' +
+    '<button type="button" class="close">Fermer</button></div>';
+  document.body.appendChild(sheet);
+  var ol = sheet.querySelector("ol");
+  hs.forEach(function (h) {
+    var li = document.createElement("li"), a = document.createElement("a");
+    a.href = "#" + h.id; a.textContent = h.textContent; li.appendChild(a); ol.appendChild(li);
+  });
+
+  var tocBtn = bar.querySelector("#rd-toc"), prev = bar.querySelector("#rd-prev"), next = bar.querySelector("#rd-next");
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function go(el) { el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" }); }
+
+  function current() {
+    var k = -1;
+    if (window.scrollY > 40 && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) return hs.length - 1;
+    for (var i = 0; i < hs.length; i++) { if (hs[i].getBoundingClientRect().top <= 80) k = i; else break; }
+    return k;
+  }
+  function update() {
+    var k = current(), max = document.documentElement.scrollHeight - window.innerHeight;
+    prog.style.width = (max > 0 ? Math.min(100, Math.max(0, window.scrollY / max * 100)) : 0) + "%";
+    tocBtn.textContent = (k < 0 ? "Début" : (k + 1) + " / " + hs.length) + " · Sommaire";
+    prev.disabled = k < 0;
+    next.disabled = k >= hs.length - 1;
+    Array.prototype.forEach.call(ol.querySelectorAll("a"), function (a, i) { a.className = i === k ? "cur" : ""; });
+  }
+  prev.addEventListener("click", function () {
+    var k = current();
+    if (k < 0) return;
+    var atStart = Math.abs(hs[k].getBoundingClientRect().top) < 24;
+    if (atStart && k > 0) go(hs[k - 1]); else if (atStart) window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" }); else go(hs[k]);
+  });
+  next.addEventListener("click", function () { var k = current(); if (k < hs.length - 1) go(hs[k + 1]); });
+  tocBtn.addEventListener("click", function () { sheet.className = "open"; });
+  sheet.addEventListener("click", function (e) {
+    if (e.target === sheet || (e.target.className === "close")) { sheet.className = ""; return; }
+    var a = e.target.closest("a");
+    if (a) { e.preventDefault(); sheet.className = ""; var t = document.getElementById(a.getAttribute("href").slice(1)); if (t) go(t); }
+  });
+  window.addEventListener("scroll", update, { passive: true });
+  window.addEventListener("resize", update);
+  update();
+})();
+</script>
 </body>
 </html>
