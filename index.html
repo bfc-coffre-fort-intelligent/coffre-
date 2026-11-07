@@ -2275,6 +2275,176 @@ try {
     showToast("Profil « " + nom + " » ajouté.");
   });
 
+  (function () {
+    /* Plusieurs photos = un seul document PDF */
+    var form = document.getElementById("upload-form");
+    var fileInput = document.getElementById("file");
+    if (!form || !fileInput) return;
+    var pages = [], box = null, strip = null, count = null, addBtn = null, MAXSIDE = 2000;
+
+    function isImgFile(f) { return !!f && /^image\/(jpeg|png|webp)$/.test(f.type); }
+    function cur() { var f = fileInput.files && fileInput.files[0]; return isImgFile(f) ? f : null; }
+
+    var st = document.createElement("style");
+    st.textContent =
+      "#pages-box{margin-top:12px;border:1.5px dashed var(--line);border-radius:12px;padding:12px;display:grid;gap:10px}" +
+      "#pages-box[hidden]{display:none}" +
+      "#pages-strip{display:flex;gap:8px;overflow-x:auto;padding:2px 0}" +
+      "#pages-strip .pg{position:relative;flex:none;width:58px;height:76px;border-radius:8px;border:1.5px solid var(--line);background:#fff center/cover no-repeat}" +
+      "#pages-strip .pg b{position:absolute;left:3px;bottom:3px;background:var(--pine);color:#fff;font-size:11px;line-height:1;border-radius:999px;padding:3px 6px}" +
+      "#pages-strip .pg button{position:absolute;right:-6px;top:-6px;width:26px;height:26px;border-radius:50%;border:0;background:var(--danger);color:#fff;font-size:15px;line-height:1;padding:0}" +
+      "#pages-count{margin:0;font-weight:600}" +
+      "#pages-count small{display:block;font-weight:400;color:var(--muted);margin-top:2px}";
+    document.head.appendChild(st);
+
+    function build() {
+      var zone = document.getElementById("pick-zone");
+      if (!zone || box) return;
+      box = document.createElement("div");
+      box.id = "pages-box"; box.hidden = true;
+      box.innerHTML = '<div id="pages-strip"></div>' +
+        '<p id="pages-count"></p>' +
+        '<button type="button" id="pages-add" class="btn ghost wide">+ Ajouter une page</button>';
+      zone.parentNode.insertBefore(box, zone.nextSibling);
+      strip = box.querySelector("#pages-strip");
+      count = box.querySelector("#pages-count");
+      addBtn = box.querySelector("#pages-add");
+      strip.addEventListener("click", function (e) {
+        var b = e.target.closest("button[data-i]"); if (!b) return;
+        var p = pages.splice(Number(b.getAttribute("data-i")), 1)[0];
+        if (p) URL.revokeObjectURL(p.url);
+        refresh();
+      });
+      addBtn.addEventListener("click", function () {
+        var f = cur();
+        if (f) pages.push({ file: f, url: URL.createObjectURL(f) });
+        try { fileInput.value = ""; } catch (e) {}
+        var sb = document.getElementById("scan-box"); if (sb) sb.hidden = true;
+        var pi = document.getElementById("pick-info"); if (pi) pi.textContent = "";
+        refresh();
+        fileInput.setAttribute("accept", "image/*");
+        fileInput.removeAttribute("capture");
+        fileInput.click();
+      });
+    }
+
+    function refresh() {
+      build();
+      if (!box) return;
+      var f = cur();
+      box.hidden = !(f || pages.length);
+      strip.innerHTML = pages.map(function (p, i) {
+        return '<div class="pg" style="background-image:url(' + p.url + ')"><b>' + (i + 1) + '</b>' +
+          '<button type="button" data-i="' + i + '" aria-label="Retirer cette page">×</button></div>';
+      }).join("");
+      var total = pages.length + (f ? 1 : 0);
+      count.innerHTML = '<span>Pages</span> <span>' + total + '</span>' +
+        '<small>Toutes les pages seront rassemblées en un seul document PDF.</small>';
+    }
+
+    function clearPages() {
+      pages.forEach(function (p) { URL.revokeObjectURL(p.url); });
+      pages = [];
+      refresh();
+    }
+
+    function loadImage(file) {
+      return new Promise(function (res, rej) {
+        var u = URL.createObjectURL(file), im = new Image();
+        im.onload = function () { URL.revokeObjectURL(u); res(im); };
+        im.onerror = function () { URL.revokeObjectURL(u); rej(new Error("img")); };
+        im.src = u;
+      });
+    }
+    function toJpeg(file) {
+      return loadImage(file).then(function (img) {
+        var w = img.naturalWidth, h = img.naturalHeight, s = Math.min(1, MAXSIDE / Math.max(w, h));
+        var cv = document.createElement("canvas");
+        cv.width = Math.max(1, Math.round(w * s)); cv.height = Math.max(1, Math.round(h * s));
+        var c = cv.getContext("2d");
+        c.fillStyle = "#fff"; c.fillRect(0, 0, cv.width, cv.height);
+        c.drawImage(img, 0, 0, cv.width, cv.height);
+        return new Promise(function (res, rej) {
+          cv.toBlob(function (b) {
+            if (!b) return rej(new Error("blob"));
+            b.arrayBuffer().then(function (ab) { res({ w: cv.width, h: cv.height, bytes: new Uint8Array(ab) }); }, rej);
+          }, "image/jpeg", 0.85);
+        });
+      });
+    }
+    function buildPdf(files) {
+      return Promise.all(files.map(toJpeg)).then(function (imgs) {
+        var enc = new TextEncoder(), chunks = [], offs = [], len = 0, n = imgs.length;
+        function add(x) { var u = typeof x === "string" ? enc.encode(x) : x; chunks.push(u); len += u.length; }
+        function start(id) { offs[id] = len; add(id + " 0 obj\n"); }
+        add("%PDF-1.4\n");
+        add(new Uint8Array([37, 226, 227, 207, 211, 10]));
+        var kids = [];
+        for (var i = 0; i < n; i++) kids.push((3 + 3 * i) + " 0 R");
+        start(1); add("<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+        start(2); add("<< /Type /Pages /Kids [" + kids.join(" ") + "] /Count " + n + " >>\nendobj\n");
+        imgs.forEach(function (im, i) {
+          var k = 3 + 3 * i, s = 842 / Math.max(im.w, im.h);
+          var pw = Math.round(im.w * s * 100) / 100, ph = Math.round(im.h * s * 100) / 100;
+          var content = "q " + pw + " 0 0 " + ph + " 0 0 cm /Im0 Do Q";
+          start(k);
+          add("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + pw + " " + ph + "] /Resources << /XObject << /Im0 " + (k + 2) + " 0 R >> >> /Contents " + (k + 1) + " 0 R >>\nendobj\n");
+          start(k + 1);
+          add("<< /Length " + content.length + " >>\nstream\n" + content + "\nendstream\nendobj\n");
+          start(k + 2);
+          add("<< /Type /XObject /Subtype /Image /Width " + im.w + " /Height " + im.h + " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " + im.bytes.length + " >>\nstream\n");
+          add(im.bytes);
+          add("\nendstream\nendobj\n");
+        });
+        var total = 2 + 3 * n, xrefAt = len, x = "xref\n0 " + (total + 1) + "\n0000000000 65535 f \n";
+        for (var id = 1; id <= total; id++) x += ("0000000000" + offs[id]).slice(-10) + " 00000 n \n";
+        add(x + "trailer\n<< /Size " + (total + 1) + " /Root 1 0 R >>\nstartxref\n" + xrefAt + "\n%%EOF\n");
+        return new Blob(chunks, { type: "application/pdf" });
+      });
+    }
+
+    function setInput(file) {
+      var dt = new DataTransfer(); dt.items.add(file); fileInput.files = dt.files;
+      var pi = document.getElementById("pick-info");
+      if (pi) pi.textContent = "Sélectionné : " + file.name + " (" + (file.size / 1024 < 1024 ? Math.round(file.size / 1024) + " Ko" : (file.size / 1048576).toFixed(1).replace(".", ",") + " Mo") + ")";
+    }
+
+    window.addEventListener("submit", async function (e) {
+      if (e.target !== form || !pages.length) return;
+      e.preventDefault(); e.stopImmediatePropagation();
+      var f = cur();
+      if (!f && fileInput.files && fileInput.files[0]) {
+        showToast("Retirez d'abord les pages ajoutées, ou ajoutez-les au même document.");
+        return;
+      }
+      var files = pages.map(function (p) { return p.file; }).concat(f ? [f] : []);
+      var btn = document.getElementById("up-submit");
+      if (btn) { btn.disabled = true; btn.textContent = "Préparation du PDF…"; }
+      try {
+        if (files.length === 1) setInput(files[0]);
+        else {
+          var blob = await buildPdf(files);
+          setInput(new File([blob], "scan.pdf", { type: "application/pdf" }));
+        }
+      } catch (err) {
+        showToast("Impossible de rassembler les pages. Réessayez.");
+        if (btn) { btn.disabled = false; btn.textContent = "Enregistrer dans le coffre"; }
+        return;
+      }
+      clearPages();
+      if (btn) { btn.disabled = false; btn.textContent = "Enregistrer dans le coffre"; }
+      if (form.requestSubmit) form.requestSubmit();
+      else form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    }, true);
+
+    var pi0 = document.getElementById("pick-info");
+    if (pi0) new MutationObserver(refresh).observe(pi0, { childList: true, characterData: true, subtree: true });
+    fileInput.addEventListener("change", refresh);
+    document.addEventListener("reset", function () { setTimeout(clearPages, 0); }, true);
+    build();
+    window.__bfcBuildPdf = buildPdf;
+  })();
+
   async function loadDocs() {
     var r = await db.from("documents").select("*").order("cree_le", { ascending: false });
     if (r.error) { showToast(fr(r.error.message)); return; }
@@ -2289,6 +2459,52 @@ try {
     return docs.filter(function (d) { return d.profil_id === selectedProfileId; });
   }
 
+  var PAGE_SIZE = 10, docPage = 1, pageKey = "";
+  function getPager() {
+    var n = document.getElementById("pager");
+    if (n) return n;
+    n = document.createElement("nav");
+    n.id = "pager"; n.hidden = true; n.setAttribute("aria-label", "Pages de la liste");
+    var st = document.createElement("style");
+    st.textContent =
+      "#pager{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px;margin:16px 0 4px}" +
+      "#pager[hidden]{display:none}" +
+      "#pager button{min-width:44px;min-height:44px;border-radius:10px;border:1.5px solid var(--line);background:#fff;color:var(--pine);font:inherit;font-weight:600;padding:0 10px}" +
+      "#pager button[aria-current=page]{background:var(--pine);color:#fff;border-color:var(--pine)}" +
+      "#pager button:disabled{opacity:.4}" +
+      "#pager .gap{min-width:20px;text-align:center;color:var(--muted)}";
+    document.head.appendChild(st);
+    list.parentNode.insertBefore(n, list.nextSibling);
+    n.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-p]");
+      if (!b || b.disabled) return;
+      docPage = Number(b.getAttribute("data-p"));
+      renderDocs();
+      var top = document.getElementById("search") || list;
+      top.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return n;
+  }
+  function renderPager(total) {
+    var n = getPager();
+    var pages = Math.ceil(total / PAGE_SIZE);
+    if (pages <= 1) { n.hidden = true; n.innerHTML = ""; return; }
+    var nums = [];
+    for (var i = 1; i <= pages; i++) {
+      if (i === 1 || i === pages || Math.abs(i - docPage) <= 1) nums.push(i);
+    }
+    var html = '<button type="button" data-p="' + (docPage - 1) + '"' + (docPage <= 1 ? " disabled" : "") + ' aria-label="Précédent">\u2039</button>';
+    var prev = 0;
+    nums.forEach(function (i) {
+      if (prev && i - prev > 1) html += '<span class="gap">\u2026</span>';
+      html += '<button type="button" data-p="' + i + '"' + (i === docPage ? ' aria-current="page"' : "") + ">" + i + "</button>";
+      prev = i;
+    });
+    html += '<button type="button" data-p="' + (docPage + 1) + '"' + (docPage >= pages ? " disabled" : "") + ' aria-label="Suivant">\u203a</button>';
+    n.innerHTML = html;
+    n.hidden = false;
+  }
+
   function renderDocs() {
     var q = norm(search.value);
     var scoped = docsForSelectedProfile();
@@ -2297,15 +2513,24 @@ try {
     });
     $("count").textContent = docs.length ? docs.length + (docs.length > 1 ? " documents au total" : " document au total") : "";
 
+    var key = selectedProfileId + "|" + q;
+    if (key !== pageKey) { pageKey = key; docPage = 1; }
+    var nbPages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
+    if (docPage > nbPages) docPage = nbPages;
+    if (docPage < 1) docPage = 1;
+
     if (!scoped.length) {
       list.innerHTML = '<li class="empty"><strong>Ce coffre est vide.</strong>Ajoutez un premier document pour ce profil.</li>';
+      renderPager(0);
       return;
     }
     if (!shown.length) {
       list.innerHTML = '<li class="empty"><strong>Aucun résultat.</strong>Essayez un autre mot, ou une autre année.</li>';
+      renderPager(0);
       return;
     }
-    list.innerHTML = shown.map(function (d) {
+    renderPager(shown.length);
+    list.innerHTML = shown.slice((docPage - 1) * PAGE_SIZE, docPage * PAGE_SIZE).map(function (d) {
       var meta = [d.type, d.annee, d.etablissement, fmtSize(d.taille_octets)].filter(Boolean).join(", ");
       return '<li class="doc">' +
         '<strong>' + esc(d.titre) + '</strong>' +
@@ -2679,6 +2904,13 @@ try {
     "8 caractères minimum.": "At least 8 characters.",
     "Se connecter": "Sign in", "Créer mon compte": "Create my account",
     "Mot de passe oublié ?": "Forgot password?",
+    "Pages": "Pages",
+    "Toutes les pages seront rassemblées en un seul document PDF.": "All pages will be combined into a single PDF document.",
+    "+ Ajouter une page": "+ Add a page",
+    "Préparation du PDF…": "Preparing the PDF…",
+    "Impossible de rassembler les pages.": "Could not combine the pages.",
+    "Réessayez.": "Try again.",
+    "Retirez d'abord les pages ajoutées, ou ajoutez-les au même document.": "First remove the added pages, or add them to the same document.",
     "Renvoyer l'e-mail de confirmation": "Resend the confirmation email",
     "E-mail de confirmation renvoyé.": "Confirmation email sent again.",
     "Patientez une minute avant de réessayer.": "Wait one minute before trying again.",
