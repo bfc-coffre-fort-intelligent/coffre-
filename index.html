@@ -1873,6 +1873,7 @@ try {
     function syncBox() { box.hidden = mode !== "signup"; }
     $("tab-login").addEventListener("click", syncBox);
     $("tab-signup").addEventListener("click", syncBox);
+    syncBox();
 
     authForm.addEventListener("submit", function (e) {
       if (mode !== "signup") return;
