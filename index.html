@@ -2539,6 +2539,117 @@ try {
     });
   })();
 
+  (function () {
+    /* Partager un document par lien temporaire */
+    var dsheet = document.getElementById("d-sheet"), delBtn = document.getElementById("d-sheet-del");
+    if (!dsheet || !delBtn) return;
+    var cur = null, secs = 86400, until = null;
+    document.addEventListener("click", function (e) {
+      var more = e.target.closest && e.target.closest(".d-more");
+      if (!more) return;
+      var li = more.closest("li.doc"), del = li && li.querySelector("[data-act=del]");
+      cur = (del && docs.find(function (x) { return x.id === del.getAttribute("data-id"); })) || null;
+    }, true);
+
+    var css = document.createElement("style");
+    css.textContent =
+      "#sh-sheet{position:fixed;inset:0;background:rgba(18,55,42,.45);display:flex;align-items:flex-end;justify-content:center;z-index:35}" +
+      "#sh-sheet[hidden]{display:none}" +
+      "#sh-sheet .box{background:#fff;width:100%;max-width:520px;border-radius:16px 16px 0 0;padding:18px 16px 22px;display:grid;gap:10px;max-height:90vh;overflow:auto}" +
+      "#sh-sheet .t{font-weight:700;overflow-wrap:anywhere}" +
+      "#sh-sheet .sh-note{margin:0;font-size:14px;color:var(--muted)}" +
+      "#sh-sheet .sh-dur{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}" +
+      "#sh-sheet .sh-dur button{min-height:48px;border-radius:10px;border:1.5px solid var(--line);background:#fff;color:var(--pine);font:inherit;font-weight:600}" +
+      "#sh-sheet .sh-dur button.on{background:var(--pine);color:#fff;border-color:var(--pine)}" +
+      "#sh-sheet #sh-url{width:100%;min-height:46px;border:1.5px solid var(--line);border-radius:10px;padding:0 10px;font:13px/1.2 monospace;color:var(--ink)}" +
+      "#sh-out{display:grid;gap:10px}#sh-out[hidden]{display:none}";
+    document.head.appendChild(css);
+
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "btn wide"; b.id = "d-share";
+    b.textContent = "Partager (lien temporaire)";
+    delBtn.parentNode.insertBefore(b, delBtn);
+
+    var sh = document.createElement("div");
+    sh.id = "sh-sheet"; sh.hidden = true;
+    sh.innerHTML = '<div class="box"><div class="t" id="sh-t"></div>' +
+      '<p class="sh-note">Toute personne qui reçoit ce lien peut voir ce document jusqu\'à la fin de la durée choisie. Le lien ne peut pas être annulé avant.</p>' +
+      '<div class="sh-dur" role="group" aria-label="Durée du lien">' +
+      '<button type="button" data-s="3600">1 heure</button>' +
+      '<button type="button" data-s="86400" class="on">24 heures</button>' +
+      '<button type="button" data-s="604800">7 jours</button></div>' +
+      '<button type="button" class="btn wide" id="sh-make">Créer le lien</button>' +
+      '<div id="sh-out" hidden><input id="sh-url" type="text" readonly aria-label="Lien de partage">' +
+      '<p class="sh-note" id="sh-exp"></p>' +
+      '<button type="button" class="btn wide" id="sh-wa">Envoyer par WhatsApp</button>' +
+      '<button type="button" class="btn ghost wide" id="sh-copy">Copier le lien</button>' +
+      '<button type="button" class="btn ghost wide" id="sh-other" hidden>Autre application</button></div>' +
+      '<button type="button" class="btn ghost wide" id="sh-close">Fermer</button></div>';
+    document.body.appendChild(sh);
+    function $s(id) { return document.getElementById(id); }
+    if (navigator.share) $s("sh-other").hidden = false;
+
+    function fmt(d) {
+      function p(n) { return ("0" + n).slice(-2); }
+      return p(d.getDate()) + "/" + p(d.getMonth() + 1) + "/" + d.getFullYear() + " à " + p(d.getHours()) + ":" + p(d.getMinutes());
+    }
+    function message() {
+      return "Voici le document « " + (cur ? cur.titre : "") + " » (lien valable jusqu'au " + fmt(until) + ") : " + $s("sh-url").value;
+    }
+    function reset() {
+      $s("sh-out").hidden = true; $s("sh-url").value = "";
+      $s("sh-make").hidden = false; $s("sh-make").disabled = false;
+    }
+
+    b.addEventListener("click", function () {
+      if (!cur) return;
+      dsheet.hidden = true;
+      $s("sh-t").textContent = cur.titre;
+      reset();
+      sh.hidden = false;
+    });
+    $s("sh-close").addEventListener("click", function () { sh.hidden = true; });
+    sh.addEventListener("click", function (e) { if (e.target === sh) sh.hidden = true; });
+    sh.querySelector(".sh-dur").addEventListener("click", function (e) {
+      var t = e.target.closest("button[data-s]"); if (!t) return;
+      secs = Number(t.getAttribute("data-s"));
+      Array.prototype.forEach.call(sh.querySelectorAll(".sh-dur button"), function (x) { x.className = x === t ? "on" : ""; });
+      reset();
+    });
+    $s("sh-make").addEventListener("click", async function () {
+      if (!cur) return;
+      var mk = this; mk.disabled = true;
+      var r;
+      try { r = await db.storage.from(BUCKET).createSignedUrl(cur.chemin_fichier, secs); } catch (err) { r = { error: err }; }
+      if (!r || r.error || !r.data || !r.data.signedUrl) {
+        mk.disabled = false;
+        showToast("Lien non créé. Réessayez dans un instant.");
+        return;
+      }
+      until = new Date(Date.now() + secs * 1000);
+      $s("sh-url").value = r.data.signedUrl;
+      $s("sh-exp").textContent = "Lien valable jusqu'au " + fmt(until) + ".";
+      $s("sh-out").hidden = false;
+      mk.hidden = true;
+    });
+    $s("sh-wa").addEventListener("click", function () {
+      window.open("https://wa.me/?text=" + encodeURIComponent(message()), "_blank", "noopener");
+    });
+    $s("sh-other").addEventListener("click", function () {
+      try { navigator.share({ title: cur ? cur.titre : "Document", text: message() }); } catch (e) {}
+    });
+    $s("sh-copy").addEventListener("click", async function () {
+      var inp = $s("sh-url");
+      try {
+        await navigator.clipboard.writeText(inp.value);
+      } catch (e) {
+        inp.focus(); inp.select();
+        try { document.execCommand("copy"); } catch (e2) {}
+      }
+      showToast("Lien copié.");
+    });
+  })();
+
   async function loadDocs() {
     var r = await db.from("documents").select("*").order("cree_le", { ascending: false });
     if (r.error) { showToast(fr(r.error.message)); return; }
@@ -2998,6 +3109,16 @@ try {
     "8 caractères minimum.": "At least 8 characters.",
     "Se connecter": "Sign in", "Créer mon compte": "Create my account",
     "Mot de passe oublié ?": "Forgot password?",
+    "Partager (lien temporaire)": "Share (temporary link)",
+    "Toute personne qui reçoit ce lien peut voir ce document jusqu'à la fin de la durée choisie.": "Anyone who receives this link can see this document until the chosen time runs out.",
+    "Le lien ne peut pas être annulé avant.": "The link cannot be cancelled before then.",
+    "1 heure": "1 hour", "24 heures": "24 hours", "7 jours": "7 days",
+    "Créer le lien": "Create the link",
+    "Envoyer par WhatsApp": "Send on WhatsApp",
+    "Copier le lien": "Copy the link",
+    "Autre application": "Another app",
+    "Lien copié.": "Link copied.",
+    "Lien non créé.": "Link not created.",
     "Installez BFC Safe sur votre téléphone": "Install BFC Safe on your phone",
     "Ouvrez votre coffre en un geste, comme une application.": "Open your vault in one tap, like an app.",
     "Installer": "Install",
