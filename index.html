@@ -2650,6 +2650,190 @@ try {
     });
   })();
 
+  (function () {
+    /* Garder quelques documents essentiels sur l'appareil (consultation sans réseau) */
+    var MAX_DOCS = 5, MAX_BYTES = 100 * 1024 * 1024, DBN = "bfc_offline";
+    var dsheet = document.getElementById("d-sheet"), delBtn = document.getElementById("d-sheet-del");
+    if (!dsheet || !delBtn || !window.indexedDB) return;
+    var cur = null, urls = [];
+
+    function open() {
+      return new Promise(function (ok, ko) {
+        var q = indexedDB.open(DBN, 1);
+        q.onupgradeneeded = function () { q.result.createObjectStore("docs", { keyPath: "id" }); };
+        q.onsuccess = function () { ok(q.result); };
+        q.onerror = function () { ko(q.error); };
+      });
+    }
+    function tx(mode, fn) {
+      return open().then(function (d) {
+        return new Promise(function (ok, ko) {
+          var t = d.transaction("docs", mode), res = fn(t.objectStore("docs"));
+          t.oncomplete = function () { d.close(); ok(res && res.result); };
+          t.onerror = t.onabort = function () { d.close(); ko(t.error); };
+        });
+      });
+    }
+    function all() { return tx("readonly", function (s) { return s.getAll(); }).then(function (r) { return r || []; }); }
+    function put(o) { return tx("readwrite", function (s) { return s.put(o); }); }
+    function del(id) { return tx("readwrite", function (s) { return s.delete(id); }); }
+    function wipe() { return tx("readwrite", function (s) { return s.clear(); }); }
+    function mo(n) { return (n / 1048576).toFixed(1).replace(".", ",") + " Mo"; }
+
+    /* Effacement à la déconnexion */
+    var so = db.auth.signOut.bind(db.auth);
+    db.auth.signOut = async function () {
+      try { await wipe(); } catch (e) {}
+      return so.apply(null, arguments);
+    };
+
+    var css = document.createElement("style");
+    css.textContent =
+      "#off-view{position:fixed;inset:0;background:var(--bg,#f5f7f4);z-index:60;overflow:auto;padding:18px 16px 28px}" +
+      "#off-view[hidden]{display:none}" +
+      "#off-view .in{max-width:520px;margin:0 auto;display:grid;gap:12px}" +
+      "#off-view h2{margin:0;color:var(--pine)}" +
+      "#off-view .note{margin:0;font-size:14px;color:var(--muted)}" +
+      "#off-view ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}" +
+      "#off-view li{background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:12px;display:grid;gap:8px}" +
+      "#off-view li b{overflow-wrap:anywhere}" +
+      "#off-bar{position:fixed;left:0;right:0;top:0;z-index:40;background:#7a4b00;color:#fff;padding:8px 12px;display:flex;gap:10px;align-items:center;justify-content:space-between;font-size:14px}" +
+      "#off-bar[hidden]{display:none}" +
+      "#off-bar button{min-height:40px;padding:0 12px;border-radius:10px;border:1.5px solid #fff;background:transparent;color:#fff;font-weight:700}" +
+      "#off-sheet{position:fixed;inset:0;background:rgba(18,55,42,.45);display:flex;align-items:flex-end;justify-content:center;z-index:36}" +
+      "#off-sheet[hidden]{display:none}" +
+      "#off-sheet .box{background:#fff;width:100%;max-width:520px;border-radius:16px 16px 0 0;padding:18px 16px 22px;display:grid;gap:10px;max-height:90vh;overflow:auto}" +
+      "#off-sheet .t{font-weight:700;overflow-wrap:anywhere}" +
+      "#off-sheet .note{margin:0;font-size:14px;color:var(--muted)}";
+    document.head.appendChild(css);
+
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "btn wide"; b.id = "d-offline";
+    b.textContent = "Garder sans réseau";
+    delBtn.parentNode.insertBefore(b, delBtn);
+
+    var sh = document.createElement("div");
+    sh.id = "off-sheet"; sh.hidden = true;
+    sh.innerHTML = '<div class="box"><div class="t" id="off-t"></div>' +
+      '<p class="note" id="off-n"></p>' +
+      '<p class="note">Une copie de ce document sera gardée sur ce téléphone, sans code de protection de notre part. Faites-le seulement sur votre propre téléphone, protégé par un verrou. Les copies sont effacées quand vous vous déconnectez.</p>' +
+      '<button type="button" class="btn wide" id="off-go">Garder ce document</button>' +
+      '<button type="button" class="btn danger wide" id="off-rm" hidden>Retirer de ce téléphone</button>' +
+      '<button type="button" class="btn ghost wide" id="off-x">Fermer</button></div>';
+    document.body.appendChild(sh);
+
+    var ov = document.createElement("div");
+    ov.id = "off-view"; ov.hidden = true;
+    ov.innerHTML = '<div class="in"><h2>Mode sans réseau</h2>' +
+      '<p class="note">Pas de connexion. Voici les documents gardés sur ce téléphone. Les autres fonctions reviennent avec le réseau.</p>' +
+      '<ul id="off-list"></ul>' +
+      '<button type="button" class="btn ghost wide" id="off-retry">Réessayer la connexion</button></div>';
+    document.body.appendChild(ov);
+
+    var bar = document.createElement("div");
+    bar.id = "off-bar"; bar.hidden = true;
+    bar.innerHTML = '<span>Pas de réseau.</span><button type="button" id="off-show">Mes documents gardés</button>';
+    document.body.appendChild(bar);
+
+    function $o(id) { return document.getElementById(id); }
+
+    document.addEventListener("click", function (e) {
+      var more = e.target.closest && e.target.closest(".d-more");
+      if (!more) return;
+      var li = more.closest("li.doc"), dl = li && li.querySelector("[data-act=del]");
+      cur = (dl && docs.find(function (x) { return x.id === dl.getAttribute("data-id"); })) || null;
+    }, true);
+
+    async function refreshSheet() {
+      var list = [], saved = false, used = 0;
+      try { list = await all(); } catch (e) {}
+      list.forEach(function (o) { used += o.size || 0; if (cur && o.id === cur.id) saved = true; });
+      $o("off-go").hidden = saved; $o("off-rm").hidden = !saved;
+      $o("off-n").textContent = saved ? "Ce document est déjà gardé sur ce téléphone." :
+        "Gardés : " + list.length + " sur " + MAX_DOCS + " (" + mo(used) + " sur " + mo(MAX_BYTES) + ").";
+      $o("off-go").disabled = false;
+    }
+    b.addEventListener("click", function () {
+      if (!cur) return;
+      dsheet.hidden = true;
+      $o("off-t").textContent = cur.titre;
+      refreshSheet();
+      sh.hidden = false;
+    });
+    $o("off-x").addEventListener("click", function () { sh.hidden = true; });
+    sh.addEventListener("click", function (e) { if (e.target === sh) sh.hidden = true; });
+
+    $o("off-go").addEventListener("click", async function () {
+      if (!cur) return;
+      var btn = this, d = cur;
+      btn.disabled = true;
+      var list = [], used = 0;
+      try { list = await all(); } catch (e) {}
+      list.forEach(function (o) { used += o.size || 0; });
+      if (list.length >= MAX_DOCS) { showToast("Limite atteinte : " + MAX_DOCS + " documents. Retirez-en un d'abord."); btn.disabled = false; return; }
+      if (used + (Number(d.taille_octets) || 0) > MAX_BYTES) { showToast("Pas assez de place (100 Mo au total)."); btn.disabled = false; return; }
+      showToast("Téléchargement en cours…");
+      try {
+        var r = await db.storage.from(BUCKET).createSignedUrl(d.chemin_fichier, 120);
+        if (r.error) throw r.error;
+        var resp = await fetch(r.data.signedUrl);
+        if (!resp.ok) throw new Error("http");
+        var blob = await resp.blob();
+        if (used + blob.size > MAX_BYTES) { showToast("Pas assez de place (100 Mo au total)."); btn.disabled = false; return; }
+        await put({ id: d.id, titre: d.titre, annee: d.annee, size: blob.size, type: blob.type || "application/octet-stream", blob: blob, at: Date.now() });
+        showToast("Document gardé sur ce téléphone.");
+        sh.hidden = true;
+      } catch (e) {
+        showToast("Impossible de garder ce document. Réessayez.");
+        btn.disabled = false;
+      }
+    });
+    $o("off-rm").addEventListener("click", async function () {
+      if (!cur) return;
+      try { await del(cur.id); showToast("Copie retirée de ce téléphone."); } catch (e) {}
+      sh.hidden = true;
+    });
+
+    async function renderOffline() {
+      urls.forEach(function (u) { URL.revokeObjectURL(u); }); urls = [];
+      var ul = $o("off-list"), list = [];
+      try { list = await all(); } catch (e) {}
+      ul.innerHTML = "";
+      if (!list.length) {
+        var p = document.createElement("li"); p.textContent = "Aucun document gardé sur ce téléphone."; ul.appendChild(p);
+        return;
+      }
+      list.forEach(function (o) {
+        var li = document.createElement("li"), t = document.createElement("b"), a = document.createElement("button");
+        t.textContent = o.titre + (o.annee ? " (" + o.annee + ")" : "");
+        a.type = "button"; a.className = "btn wide"; a.textContent = "Ouvrir";
+        a.addEventListener("click", function () {
+          var u = URL.createObjectURL(o.blob); urls.push(u);
+          window.open(u, "_blank") || (window.location.href = u);
+        });
+        li.appendChild(t); li.appendChild(a); ul.appendChild(li);
+      });
+    }
+    async function showOffline() { await renderOffline(); ov.hidden = false; }
+    $o("off-show").addEventListener("click", showOffline);
+    $o("off-retry").addEventListener("click", function () {
+      if (navigator.onLine) { ov.hidden = true; bar.hidden = true; window.location.reload(); }
+      else showToast("Toujours pas de réseau.");
+    });
+
+    async function check(auto) {
+      if (navigator.onLine) { bar.hidden = true; return; }
+      var n = 0;
+      try { n = (await all()).length; } catch (e) {}
+      if (!n) return;
+      bar.hidden = false;
+      if (auto) showOffline();
+    }
+    window.addEventListener("offline", function () { check(false); });
+    window.addEventListener("online", function () { bar.hidden = true; ov.hidden = true; });
+    check(true);
+  })();
+
   async function loadDocs() {
     var r = await db.from("documents").select("*").order("cree_le", { ascending: false });
     if (r.error) { showToast(fr(r.error.message)); return; }
@@ -3109,6 +3293,22 @@ try {
     "8 caractères minimum.": "At least 8 characters.",
     "Se connecter": "Sign in", "Créer mon compte": "Create my account",
     "Mot de passe oublié ?": "Forgot password?",
+    "Garder sans réseau": "Keep offline",
+    "Garder ce document": "Keep this document",
+    "Retirer de ce téléphone": "Remove from this phone",
+    "Mode sans réseau": "Offline mode",
+    "Pas de connexion": "No connection",
+    "Voici les documents gardés sur ce téléphone": "Here are the documents kept on this phone",
+    "Les autres fonctions reviennent avec le réseau": "Other features return when the network is back",
+    "Aucun document gardé sur ce téléphone": "No document kept on this phone",
+    "Réessayer la connexion": "Retry connection",
+    "Mes documents gardés": "My kept documents",
+    "Pas de réseau": "No network",
+    "Ouvrir": "Open",
+    "Ce document est déjà gardé sur ce téléphone": "This document is already kept on this phone",
+    "Une copie de ce document sera gardée sur ce téléphone, sans code de protection de notre part": "A copy of this document will be kept on this phone, without any protection code from us",
+    "Faites-le seulement sur votre propre téléphone, protégé par un verrou": "Only do this on your own phone, protected by a lock",
+    "Les copies sont effacées quand vous vous déconnectez": "Copies are erased when you sign out",
     "Partager (lien temporaire)": "Share (temporary link)",
     "Toute personne qui reçoit ce lien peut voir ce document jusqu'à la fin de la durée choisie.": "Anyone who receives this link can see this document until the chosen time runs out.",
     "Le lien ne peut pas être annulé avant.": "The link cannot be cancelled before then.",
