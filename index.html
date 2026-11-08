@@ -1106,6 +1106,7 @@ try {
       '<div class="stat"><b>' + n.actif + '</b><span>actifs</span></div>' +
       '<div class="stat"><b>' + n.retard + '</b><span>échéance dépassée</span></div></div>' +
       cntHtml() +
+      '<button id="adm-acc" class="btn ghost wide" type="button">Demandes d\'accès (personne de confiance)</button>' +
       '<input id="adm-q" type="search" placeholder="Chercher un e-mail" value="' + esc(filter || "") + '">' +
       '<ul>' + (rows.length ? rows.map(function (c, i) {
         var d = daysLeft(c.echeance), note = "";
@@ -2832,6 +2833,185 @@ try {
     window.addEventListener("offline", function () { check(false); });
     window.addEventListener("online", function () { bar.hidden = true; ov.hidden = true; });
     check(true);
+  })();
+
+  (function () {
+    /* Personne de confiance : désignation, demande d'accès (ayant droit) et décision de l'administrateur */
+    var links = document.querySelector("#app-view .legal-links");
+    if (!links) return;
+    function E(v) { return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+    function D(v) { return v ? new Date(v).toLocaleDateString("fr-FR") : "—"; }
+    function me() { return currentUser && currentUser.id; }
+
+    var css = document.createElement("style");
+    css.textContent =
+      ".pc-sheet{position:fixed;inset:0;background:var(--paper,#F3F5F2);z-index:62;overflow:auto;padding:16px}" +
+      ".pc-sheet[hidden]{display:none}" +
+      ".pc-sheet .in{max-width:560px;margin:0 auto;display:grid;gap:12px}" +
+      ".pc-sheet h2{margin:0;font-size:22px}" +
+      ".pc-sheet .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:10px}" +
+      ".pc-sheet .sub{font-size:14px;color:var(--muted);margin:0}" +
+      ".pc-sheet label{font-weight:600;font-size:14px}" +
+      ".pc-sheet input,.pc-sheet textarea{width:100%;box-sizing:border-box;border:1.5px solid var(--line);border-radius:10px;padding:10px;font:inherit;background:#fff;min-height:48px}" +
+      ".pc-sheet textarea{min-height:90px}" +
+      ".pc-sheet .em{font-weight:600;overflow-wrap:anywhere}" +
+      ".pc-sheet .ok{color:#1B6B3A;font-weight:600}.pc-sheet .no{color:#B3261E;font-weight:600}" +
+      ".pc-sheet button.cl{width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font:inherit;color:inherit;display:grid;gap:2px}" +
+      ".pc-sheet ul{list-style:none;margin:0;padding:0;display:grid;gap:8px}";
+    document.head.appendChild(css);
+
+    function mk(id) {
+      var s = document.createElement("div");
+      s.id = id; s.className = "pc-sheet"; s.hidden = true;
+      document.body.appendChild(s); return s;
+    }
+    var shMine = mk("pc-mine"), shAsk = mk("pc-ask"), shView = mk("pc-view"), shAdm = mk("pc-adm");
+
+    var b1 = document.createElement("button");
+    b1.type = "button"; b1.className = "lnk"; b1.id = "pc-open"; b1.textContent = "Ma personne de confiance";
+    var b2 = document.createElement("button");
+    b2.type = "button"; b2.className = "lnk"; b2.id = "pc-ask-open"; b2.textContent = "Demander l'accès à un coffre (ayant droit)";
+    links.insertBefore(b2, links.firstChild);
+    links.insertBefore(b1, links.firstChild);
+
+    /* ---------- 1. Désigner sa personne de confiance ---------- */
+    b1.addEventListener("click", async function () {
+      var r = await db.from("personnes_confiance").select("*").eq("user_id", me()).maybeSingle();
+      var p = (r && r.data) || {};
+      shMine.innerHTML = '<div class="in"><h2>Ma personne de confiance</h2>' +
+        '<p class="sub">Cette personne pourra demander l\'accès à vos documents si vous n\'êtes plus là. Elle n\'a aucun accès maintenant et ne reçoit pas votre mot de passe. Pour toute demande, BFC Safe vérifie ses pièces justificatives, attend un délai de sécurité de 7 jours, et garde une trace écrite. Elle devra créer son propre compte BFC Safe avec l\'adresse e-mail ci-dessous.</p>' +
+        '<div class="card"><div><label for="pc-n">Nom complet</label><input id="pc-n" value="' + E(p.nom) + '"></div>' +
+        '<div><label for="pc-e">Adresse e-mail</label><input id="pc-e" type="email" inputmode="email" value="' + E(p.email) + '"></div>' +
+        '<div><label for="pc-t">Téléphone (facultatif)</label><input id="pc-t" type="tel" value="' + E(p.telephone) + '"></div>' +
+        '<button type="button" class="btn wide" id="pc-save">Enregistrer</button>' +
+        (p.email ? '<button type="button" class="btn danger wide" id="pc-del">Retirer cette personne</button>' : '') + '</div>' +
+        '<button type="button" class="btn ghost wide" id="pc-x1">Fermer</button></div>';
+      shMine.hidden = false;
+      shMine.querySelector("#pc-x1").addEventListener("click", function () { shMine.hidden = true; });
+      shMine.querySelector("#pc-save").addEventListener("click", async function () {
+        var n = shMine.querySelector("#pc-n").value.trim(), e = shMine.querySelector("#pc-e").value.trim().toLowerCase(), t = shMine.querySelector("#pc-t").value.trim();
+        if (!n || e.indexOf("@") < 1) { showToast("Écrivez le nom et une adresse e-mail valide."); return; }
+        var w = await db.from("personnes_confiance").upsert({ user_id: me(), nom: n, email: e, telephone: t || null, maj_le: new Date().toISOString() });
+        if (w.error) { showToast("Enregistrement impossible. Réessayez."); return; }
+        showToast("Personne de confiance enregistrée.");
+        shMine.hidden = true;
+      });
+      var del = shMine.querySelector("#pc-del");
+      if (del) del.addEventListener("click", async function () {
+        if (!window.confirm("Retirer cette personne de confiance ?")) return;
+        var w = await db.from("personnes_confiance").delete().eq("user_id", me());
+        if (w.error) { showToast("Impossible de retirer. Réessayez."); return; }
+        showToast("Personne retirée."); shMine.hidden = true;
+      });
+    });
+
+    /* ---------- 2. Ayant droit : demander l'accès ---------- */
+    var STT = { en_attente: "En attente de vérification", approuvee: "Acceptée", refusee: "Refusée" };
+    async function openAsk() {
+      var r = await db.from("demandes_acces").select("*").order("cree_le", { ascending: false });
+      var list = (r && r.data) || [];
+      var ac = await db.rpc("mes_acces_confies");
+      var acc = (ac && ac.data) || [];
+      shAsk.innerHTML = '<div class="in"><h2>Demander l\'accès à un coffre</h2>' +
+        '<p class="sub">Réservé aux personnes désignées par le titulaire ou à ses proches (conjoint, enfant, parent). Vous devez avoir votre propre compte BFC Safe. Après votre demande, envoyez vos pièces justificatives à contact@coffre-bfc.com : acte de décès, votre pièce d\'identité, et une preuve de votre lien avec la personne. BFC Safe vérifie, puis l\'accès s\'ouvre après un délai de sécurité (7 jours si vous avez été désigné, 15 jours sinon). L\'accès est en lecture seule.</p>' +
+        '<div class="card"><div><label for="pa-e">Adresse e-mail du compte BFC Safe du défunt</label><input id="pa-e" type="email" inputmode="email"></div>' +
+        '<div><label for="pa-n">Nom du défunt</label><input id="pa-n"></div>' +
+        '<div><label for="pa-l">Votre lien avec lui (conjoint, enfant…)</label><input id="pa-l"></div>' +
+        '<div><label for="pa-m">Message (facultatif)</label><textarea id="pa-m"></textarea></div>' +
+        '<button type="button" class="btn wide" id="pa-send">Envoyer ma demande</button></div>' +
+        (list.length ? '<h3 style="margin:6px 0 0">Mes demandes</h3><ul>' + list.map(function (d) {
+          return '<li class="card"><div class="em">' + E(d.titulaire_email) + '</div><div class="sub">' + E(STT[d.statut] || d.statut) + ' · demandée le ' + D(d.cree_le) +
+            (d.statut === "approuvee" ? ' · lecture possible du ' + D(d.ouvre_le) + ' au ' + D(d.expire_le) : '') + '</div></li>';
+        }).join("") + '</ul>' : '') +
+        (acc.length ? '<h3 style="margin:6px 0 0">Documents qui m\'ont été confiés</h3><ul>' + acc.map(function (a, i) {
+          return '<li><button type="button" class="cl" data-i="' + i + '"' + (a.ouvert ? '' : ' disabled') + '><span class="em">' + E(a.nom_defunt || "Coffre confié") + '</span><span class="sub">' +
+            (a.ouvert ? 'Ouvert jusqu\'au ' + D(a.expire_le) + ' — toucher pour voir' : 'S\'ouvrira le ' + D(a.ouvre_le)) + '</span></button></li>';
+        }).join("") + '</ul>' : '') +
+        '<button type="button" class="btn ghost wide" id="pa-x">Fermer</button></div>';
+      shAsk.hidden = false;
+      shAsk.querySelector("#pa-x").addEventListener("click", function () { shAsk.hidden = true; });
+      shAsk.querySelector("#pa-send").addEventListener("click", async function () {
+        var e = shAsk.querySelector("#pa-e").value.trim();
+        if (e.indexOf("@") < 1) { showToast("Écrivez l'adresse e-mail du défunt."); return; }
+        var w = await db.rpc("demander_acces", { p_email_defunt: e, p_nom_defunt: shAsk.querySelector("#pa-n").value.trim(), p_lien: shAsk.querySelector("#pa-l").value.trim(), p_message: shAsk.querySelector("#pa-m").value.trim() });
+        if (w.error) { showToast(/trop de demandes/.test(w.error.message) ? "Vous avez déjà 3 demandes en attente." : "Demande impossible. Réessayez."); return; }
+        showToast("Demande envoyée. Envoyez maintenant vos pièces à contact@coffre-bfc.com.");
+        openAsk();
+      });
+      Array.prototype.forEach.call(shAsk.querySelectorAll("button.cl"), function (b) {
+        b.addEventListener("click", function () { viewConfided(acc[Number(b.getAttribute("data-i"))]); });
+      });
+    }
+    b2.addEventListener("click", openAsk);
+
+    async function viewConfided(a) {
+      var r = await db.from("documents").select("id,titre,annee,type,chemin_fichier,taille_octets").eq("user_id", a.titulaire_id).order("titre");
+      var docsC = (r && r.data) || [];
+      shView.innerHTML = '<div class="in"><h2>' + E(a.nom_defunt || "Documents confiés") + '</h2>' +
+        '<p class="sub">Lecture seule. Ces documents sont confidentiels : utilisez-les uniquement pour les démarches liées à la succession.</p>' +
+        '<ul>' + (docsC.length ? docsC.map(function (d, i) {
+          return '<li><button type="button" class="cl" data-i="' + i + '"><span class="em">' + E(d.titre) + '</span><span class="sub">' + E(d.annee || "") + '</span></button></li>';
+        }).join("") : '<li class="sub">Aucun document.</li>') + '</ul>' +
+        '<button type="button" class="btn ghost wide" id="pv-x">Fermer</button></div>';
+      shView.hidden = false;
+      shView.querySelector("#pv-x").addEventListener("click", function () { shView.hidden = true; });
+      Array.prototype.forEach.call(shView.querySelectorAll("button.cl"), function (b) {
+        b.addEventListener("click", async function () {
+          var d = docsC[Number(b.getAttribute("data-i"))];
+          var w = window.open("", "_blank");
+          var s = await db.storage.from(BUCKET).createSignedUrl(d.chemin_fichier, 120);
+          if (s.error) { if (w) w.close(); showToast("Impossible d'ouvrir ce document."); return; }
+          if (w) w.location.href = s.data.signedUrl; else window.location.href = s.data.signedUrl;
+        });
+      });
+    }
+
+    /* ---------- 3. Administrateur : décider ---------- */
+    async function openAdm() {
+      var r = await db.rpc("admin_lister_demandes");
+      if (r.error) { showToast("Accès refusé ou erreur."); return; }
+      var L = r.data || [];
+      shAdm.innerHTML = '<div class="in"><h2>Demandes d\'accès</h2><ul>' + (L.length ? L.map(function (d, i) {
+        return '<li><button type="button" class="cl" data-i="' + i + '"><span class="em">' + E(d.demandeur_email) + ' → ' + E(d.titulaire_email) + '</span><span class="sub">' +
+          E(STT[d.statut] || d.statut) + ' · ' + D(d.cree_le) + '</span></button></li>';
+      }).join("") : '<li class="sub">Aucune demande.</li>') + '</ul><button type="button" class="btn ghost wide" id="pm-x">Fermer</button></div>';
+      shAdm.hidden = false;
+      shAdm.querySelector("#pm-x").addEventListener("click", function () { shAdm.hidden = true; });
+      Array.prototype.forEach.call(shAdm.querySelectorAll("button.cl"), function (b) {
+        b.addEventListener("click", function () { detail(L[Number(b.getAttribute("data-i"))]); });
+      });
+    }
+    function detail(d) {
+      var same = d.emails_identiques, delai = same ? 7 : 15, wait = d.statut === "en_attente";
+      shAdm.innerHTML = '<div class="in"><h2>Demande d\'accès</h2><div class="card">' +
+        '<div><b>Demandeur (compte à qui l\'accès sera donné)</b><div class="em">' + E(d.demandeur_email) + '</div></div>' +
+        '<div><b>Coffre demandé</b><div class="em">' + E(d.titulaire_email) + '</div><div class="sub">' + (d.compte_trouve ? '<span class="ok">Compte trouvé</span>' : '<span class="no">Aucun compte avec cette adresse</span>') + (d.nom_defunt ? ' · ' + E(d.nom_defunt) : '') + '</div></div>' +
+        '<div><b>Personne désignée par le titulaire</b><div class="em">' + (d.email_designe ? E(d.nom_designe) + ' — ' + E(d.email_designe) : 'Aucune') + '</div>' +
+        '<div class="sub">' + (same ? '<span class="ok">Même adresse que le demandeur : délai de 7 jours</span>' : '<span class="no">Adresses différentes ou personne non désignée : cas exceptionnel, 15 jours, motif écrit obligatoire</span>') + '</div></div>' +
+        '<div class="sub">Lien déclaré : ' + E(d.lien || "—") + '<br>Message : ' + E(d.message || "—") + '</div>' +
+        '<div class="sub">Statut : ' + E(STT[d.statut] || d.statut) + (d.motif_admin ? '<br>Motif noté : ' + E(d.motif_admin) : '') + (d.ouvre_le ? '<br>Ouverture : ' + D(d.ouvre_le) + ' · fin : ' + D(d.expire_le) : '') + '</div>' +
+        (wait ? '<div><label for="pm-m">Motif / pièces vérifiées (texte écrit, noté dans la trace)</label><textarea id="pm-m" placeholder="Ex. : acte de décès n° …, CNI vue, acte de naissance prouvant le lien"></textarea></div>' +
+          '<button type="button" class="btn wide" id="pm-ok"' + (d.compte_trouve ? '' : ' disabled') + '>Ouvrir l\'accès (après ' + delai + ' jours)</button>' +
+          '<button type="button" class="btn danger wide" id="pm-no">Refuser</button>' : '') +
+        '</div><button type="button" class="btn ghost wide" id="pm-back">Retour</button></div>';
+      shAdm.querySelector("#pm-back").addEventListener("click", openAdm);
+      async function decide(kind) {
+        var m = shAdm.querySelector("#pm-m").value.trim();
+        if ((kind === "refuser" || !same) && !m) { showToast("Écrivez un motif avant de continuer."); return; }
+        if (!window.confirm(kind === "ouvrir" ? "Confirmer : ouvrir l'accès à " + d.demandeur_email + " après " + delai + " jours ?" : "Confirmer le refus ?")) return;
+        var w = await db.rpc("admin_decider_demande", { p_id: d.id, p_decision: kind, p_motif: m });
+        if (w.error) { showToast("Impossible : " + String(w.error.message || "").slice(0, 80)); return; }
+        showToast(kind === "ouvrir" ? "Accès programmé. Envoyez un e-mail au titulaire si possible." : "Demande refusée.");
+        openAdm();
+      }
+      if (wait) {
+        shAdm.querySelector("#pm-ok").addEventListener("click", function () { decide("ouvrir"); });
+        shAdm.querySelector("#pm-no").addEventListener("click", function () { decide("refuser"); });
+      }
+    }
+    document.addEventListener("click", function (e) {
+      if (e.target && e.target.id === "adm-acc") openAdm();
+    });
   })();
 
   async function loadDocs() {
