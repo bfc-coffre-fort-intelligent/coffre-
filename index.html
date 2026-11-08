@@ -2445,6 +2445,100 @@ try {
     window.__bfcBuildPdf = buildPdf;
   })();
 
+  (function () {
+    /* Installer l'application sur l'écran d'accueil : bouton, bandeau, explications */
+    var standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone;
+    if (standalone) return;
+    var ua = navigator.userAgent || "";
+    var isIOS = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    var isAndroid = /android/i.test(ua);
+    var deferred = null, KEY = "bfc-install-x";
+    function dismissed() { try { return localStorage.getItem(KEY) === "1"; } catch (e) { return false; } }
+    function setDismissed() { try { localStorage.setItem(KEY, "1"); } catch (e) {} }
+
+    try { if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () {}); } catch (e) {}
+
+    var st = document.createElement("style");
+    st.textContent =
+      "#inst-banner{margin-top:16px;display:flex;align-items:center;gap:10px;border:1.5px solid var(--brass);background:#FFFBF0;border-radius:12px;padding:12px 14px}" +
+      "#inst-banner[hidden]{display:none}" +
+      "#inst-banner .tx{flex:1;min-width:0}" +
+      "#inst-banner strong{display:block;font-family:var(--serif);font-size:17px;color:var(--pine)}" +
+      "#inst-banner span{display:block;font-size:14px;color:var(--muted);margin-top:2px}" +
+      "#inst-banner .x{flex:none;width:40px;height:40px;border:0;background:transparent;font-size:22px;color:var(--muted)}" +
+      "#inst-sheet{position:fixed;inset:0;z-index:70;background:rgba(20,53,42,.45);display:none;align-items:flex-end}" +
+      "#inst-sheet.open{display:flex}" +
+      "#inst-sheet .pn{background:#fff;width:100%;max-height:80vh;overflow:auto;border-radius:18px 18px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom))}" +
+      "#inst-sheet h3{font-family:var(--serif);font-size:21px;margin:0 0 4px;color:var(--pine)}" +
+      "#inst-sheet p{margin:4px 0 10px;color:var(--muted)}" +
+      "#inst-sheet ol{margin:0 0 14px;padding-left:22px;display:grid;gap:10px;font-size:16px}";
+    document.head.appendChild(st);
+
+    var banner = document.createElement("div");
+    banner.id = "inst-banner"; banner.hidden = true;
+    banner.innerHTML = '<div class="tx"><strong>Installez BFC Safe sur votre téléphone</strong>' +
+      '<span>Ouvrez votre coffre en un geste, comme une application.</span></div>' +
+      '<button type="button" class="btn small" id="inst-go">Installer</button>' +
+      '<button type="button" class="x" id="inst-x" aria-label="Fermer">×</button>';
+    var anchor = document.getElementById("toggle-add");
+    if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(banner, anchor); else document.getElementById("app-view").appendChild(banner);
+    banner.hidden = dismissed();
+
+    var sheet = document.createElement("div");
+    sheet.id = "inst-sheet";
+    var steps;
+    if (isIOS) {
+      steps = ["Ouvrez cette page dans Safari, si ce n'est pas déjà le cas.",
+        "Touchez le bouton Partager (le carré avec une flèche vers le haut).",
+        "Choisissez « Sur l'écran d'accueil », puis touchez « Ajouter »."];
+    } else if (isAndroid) {
+      steps = ["Touchez les trois points en haut à droite de votre navigateur.",
+        "Choisissez « Installer l'application » ou « Ajouter à l'écran d'accueil ».",
+        "Confirmez. L'icône BFC Safe apparaît sur votre écran d'accueil."];
+    } else {
+      steps = ["Dans la barre d'adresse du navigateur, cliquez sur l'icône « Installer ».",
+        "Sinon, ouvrez le menu du navigateur et choisissez « Installer BFC Safe ».",
+        "Confirmez. BFC Safe s'ouvre alors comme une application."];
+    }
+    sheet.innerHTML = '<div class="pn" role="dialog" aria-label="Installer BFC Safe"><h3>Installer BFC Safe</h3>' +
+      '<p>Suivez ces étapes, cela prend quelques secondes.</p><ol>' +
+      steps.map(function (t) { return "<li>" + t.replace(/&/g, "&amp;").replace(/</g, "&lt;") + "</li>"; }).join("") +
+      '</ol><button type="button" class="btn wide" id="inst-close">J\'ai compris</button></div>';
+    document.body.appendChild(sheet);
+
+    function hideAll() {
+      banner.hidden = true; sheet.className = "";
+      Array.prototype.forEach.call(document.querySelectorAll(".inst-link"), function (b) { b.hidden = true; });
+    }
+    function go() {
+      if (deferred) {
+        var d = deferred; deferred = null;
+        try {
+          d.prompt();
+          if (d.userChoice) d.userChoice.then(function (c) { if (c && c.outcome === "accepted") hideAll(); });
+        } catch (e) { sheet.className = "open"; }
+      } else {
+        sheet.className = "open";
+      }
+    }
+    window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); deferred = e; });
+    window.addEventListener("appinstalled", hideAll);
+
+    document.getElementById("inst-go").addEventListener("click", go);
+    document.getElementById("inst-x").addEventListener("click", function () { setDismissed(); banner.hidden = true; });
+    sheet.addEventListener("click", function (e) {
+      if (e.target === sheet || e.target.id === "inst-close") sheet.className = "";
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll(".legal-links"), function (box) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "lnk inst-link";
+      b.textContent = "Installer l'application sur mon écran d'accueil";
+      b.addEventListener("click", go);
+      box.insertBefore(b, box.firstChild);
+    });
+  })();
+
   async function loadDocs() {
     var r = await db.from("documents").select("*").order("cree_le", { ascending: false });
     if (r.error) { showToast(fr(r.error.message)); return; }
@@ -2904,6 +2998,22 @@ try {
     "8 caractères minimum.": "At least 8 characters.",
     "Se connecter": "Sign in", "Créer mon compte": "Create my account",
     "Mot de passe oublié ?": "Forgot password?",
+    "Installez BFC Safe sur votre téléphone": "Install BFC Safe on your phone",
+    "Ouvrez votre coffre en un geste, comme une application.": "Open your vault in one tap, like an app.",
+    "Installer": "Install",
+    "Installer BFC Safe": "Install BFC Safe",
+    "Installer l'application sur mon écran d'accueil": "Install the app on my home screen",
+    "Suivez ces étapes, cela prend quelques secondes.": "Follow these steps, it only takes a few seconds.",
+    "J'ai compris": "Got it",
+    "Ouvrez cette page dans Safari, si ce n'est pas déjà le cas.": "Open this page in Safari, if you are not already.",
+    "Touchez le bouton Partager (le carré avec une flèche vers le haut).": "Tap the Share button (the square with an arrow pointing up).",
+    "Choisissez « Sur l'écran d'accueil », puis touchez « Ajouter ».": "Choose “Add to Home Screen”, then tap “Add”.",
+    "Touchez les trois points en haut à droite de votre navigateur.": "Tap the three dots at the top right of your browser.",
+    "Choisissez « Installer l'application » ou « Ajouter à l'écran d'accueil ».": "Choose “Install app” or “Add to Home screen”.",
+    "Confirmez. L'icône BFC Safe apparaît sur votre écran d'accueil.": "Confirm. The BFC Safe icon appears on your home screen.",
+    "Dans la barre d'adresse du navigateur, cliquez sur l'icône « Installer ».": "In the browser address bar, click the “Install” icon.",
+    "Sinon, ouvrez le menu du navigateur et choisissez « Installer BFC Safe ».": "Otherwise, open the browser menu and choose “Install BFC Safe”.",
+    "Confirmez. BFC Safe s'ouvre alors comme une application.": "Confirm. BFC Safe then opens like an app.",
     "Pages": "Pages",
     "Toutes les pages seront rassemblées en un seul document PDF.": "All pages will be combined into a single PDF document.",
     "+ Ajouter une page": "+ Add a page",
