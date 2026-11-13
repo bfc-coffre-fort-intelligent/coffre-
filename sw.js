@@ -1,11 +1,11 @@
-/* BFC Safe : service worker. Garde l'application en mémoire pour qu'elle s'ouvre sans réseau.
-   Les données (documents, comptes) ne sont jamais mises en cache ici. */
-var CACHE = "bfc-shell-v1";
+/* BFC Safe : service worker v2. L'application s'ouvre tout de suite depuis la mémoire du téléphone,
+   puis se met à jour en arrière-plan quand le réseau répond. Les données (documents, comptes) ne sont jamais mises en cache ici. */
+var CACHE = "bfc-shell-v2";
 var CDN = [
   "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2",
   "https://cdn.jsdelivr.net/npm/tus-js-client@4.1.0/dist/tus.min.js"
 ];
-var LOCAL = ["./", "index.html", "manifest.json"];
+var LOCAL = ["./", "index.html", "accueil.html", "manifest.json", "bfc-icone-192.png", "symbole-fond-vert.svg"];
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) {
     return Promise.all(LOCAL.concat(CDN).map(function (u) { return c.add(u).catch(function () {}); }));
@@ -21,14 +21,20 @@ self.addEventListener("fetch", function (e) {
   if (r.method !== "GET") return;
   var u = new URL(r.url);
   var isCdn = u.hostname === "cdn.jsdelivr.net";
-  var isShell = u.origin === self.location.origin && (r.mode === "navigate" || /\.(html|json|png|js)$/.test(u.pathname) || u.pathname.slice(-1) === "/");
+  var isShell = u.origin === self.location.origin && (r.mode === "navigate" || /\.(html|json|png|js|svg|jpg)$/.test(u.pathname) || u.pathname.slice(-1) === "/");
   if (!isCdn && !isShell) return;
-  e.respondWith(fetch(r).then(function (resp) {
-    if (resp && resp.ok) { var cp = resp.clone(); caches.open(CACHE).then(function (c) { c.put(r, cp); }); }
-    return resp;
-  }).catch(function () {
-    return caches.match(r, { ignoreSearch: true }).then(function (m) {
-      return m || (r.mode === "navigate" ? caches.match("index.html") || caches.match("./") : undefined);
+  e.respondWith(caches.open(CACHE).then(function (c) {
+    return c.match(r, { ignoreSearch: true }).then(function (hit) {
+      var net = fetch(r).then(function (resp) {
+        if (resp && resp.ok) c.put(r, resp.clone());
+        return resp;
+      }).catch(function () { return null; });
+      if (hit) { e.waitUntil(net); return hit; }
+      return net.then(function (resp) {
+        if (resp) return resp;
+        if (r.mode === "navigate") return c.match("index.html") || c.match("./");
+        return Response.error();
+      });
     });
   }));
 });
