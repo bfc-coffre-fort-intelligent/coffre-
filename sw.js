@@ -1,6 +1,6 @@
-/* BFC Safe : service worker v2. L'application s'ouvre tout de suite depuis la mémoire du téléphone,
+/* BFC Safe : service worker v3. L'application s'ouvre tout de suite depuis la mémoire du téléphone,
    puis se met à jour en arrière-plan quand le réseau répond. Les données (documents, comptes) ne sont jamais mises en cache ici. */
-var CACHE = "bfc-shell-v2";
+var CACHE = "bfc-shell-v3";
 var CDN = [
   "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2",
   "https://cdn.jsdelivr.net/npm/tus-js-client@4.1.0/dist/tus.min.js"
@@ -8,7 +8,7 @@ var CDN = [
 var LOCAL = ["./", "index.html", "accueil.html", "manifest.json", "bfc-icone-192.png", "symbole-fond-vert.svg"];
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) {
-    return Promise.all(LOCAL.concat(CDN).map(function (u) { return c.add(u).catch(function () {}); }));
+    return Promise.all(LOCAL.concat(CDN).map(function (u) { return fetch(new Request(u, { cache: "reload" })).then(function (resp) { if (resp && resp.ok) return c.put(u, resp); }).catch(function () {}); }));
   }).then(function () { return self.skipWaiting(); }));
 });
 self.addEventListener("activate", function (e) {
@@ -25,7 +25,7 @@ self.addEventListener("fetch", function (e) {
   if (!isCdn && !isShell) return;
   e.respondWith(caches.open(CACHE).then(function (c) {
     return c.match(r, { ignoreSearch: true }).then(function (hit) {
-      var net = fetch(r).then(function (resp) {
+      var net = fetch(r, { cache: "no-cache" }).then(function (resp) {
         if (resp && resp.ok) c.put(r, resp.clone());
         return resp;
       }).catch(function () { return null; });
